@@ -1,6 +1,6 @@
 " DoxygenToolkit.vim
 " Brief: Usefull tools for Doxygen (comment, author, license).
-" Version: 0.1.6
+" Version: 0.1.7
 " Date: 05/12/04
 " Author: Mathias Lorente
 "
@@ -345,14 +345,15 @@ endfunction
 
 
 """"""""""""""""""""""""""
-" Doxygen author comment
+" Doxygen undocument function
 """"""""""""""""""""""""""
 function! <SID>DoxygenUndocumentFunc(blockTag)
+	let l:search = "#ifdef " . a:blockTag
 	" Save cursor position and go to the begining of the file
 	mark d
 	exec "normal gg"
 
-	while ( search(a:blockTag, 'W') != 0 )
+	while ( search(l:search, 'W') != 0 )
 		exec "normal O#ifndef " . g:DoxygenToolkit_undocTag
 		exec "normal j^%"
 		exec "normal o#endif /* " . g:DoxygenToolkit_undocTag . " */"
