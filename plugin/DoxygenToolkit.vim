@@ -1,17 +1,17 @@
 " DoxygenToolkit.vim
 " Brief: Usefull tools for Doxygen (comment, author, license).
-" Version: 0.1.5
+" Version: 0.1.6
 " Date: 05/12/04
 " Author: Mathias Lorente
 "
-" Actually four purposes have been defined :
+" Actually five purposes have been defined :
 "
 " Generates a doxygen license comment.  The tag text is configurable.
 "
 " Generates a doxygen author skeleton.  The tag text is configurable.
 "
-" Generates a doxygen comment skeleton for a C, C++, or Java function, including
-" @brief, @param (for each named argument), and @return.  The tag
+" Generates a doxygen comment skeleton for a C, C++, or Java function or class,
+" including @brief, @param (for each named argument), and @return.  The tag
 " text as well as a comment block header and footer are configurable.
 " (Consequently, you can have \brief, etc. if you wish, with little effort.)
 " 
@@ -21,6 +21,9 @@
 " any other name that you have configured).  Then you have to update
 " PREDEFINED value in your doxygen configuration file with correct block name.
 " You also have to set ENABLE_PREPROCESSING to YES.
+" 
+" Generate a doxygen group (begining and ending). The tag text is
+" configurable.
 "
 " Use:
 " - License :
@@ -34,10 +37,10 @@
 "   skeleton and leave the cursor just after @author tag if no variable
 "   define it, or just after the skeleton.
 "
-" - Function comment :
+" - Function / class comment :
 "   In vim, place the cursor on the line of the function header (or returned
-"   value of the function).  Then execute the command :Dox.  This will
-"   generate the skeleton and leave the cursor after the @brief tag.
+"   value of the function) or the class.  Then execute the command :Dox.  This
+"   will generate the skeleton and leave the cursor after the @brief tag.
 "
 " - Ignore code fragment :
 "   In vim, if you want to ignore all code fragment placed in a block such as :
@@ -45,6 +48,10 @@
 "   	...
 "   	#endif
 "   You only have to execute the command :DoxUndoc(DEBUG) !
+"   
+" - Group :
+"   In vim, execute the command :DoxBlock to insert a doxygen block on the
+"   following line.
 "
 " Limitations:
 " - Assumes that the function name (and the following opening parenthesis) is
@@ -76,7 +83,7 @@
 " * @param mask
 " *
 " * @return
-" **/
+" */
 "
 "
 " To customize the output of the script, see the g:DoxygenToolkit_*
@@ -145,6 +152,9 @@ endif
 if !exists("g:DoxygenToolkit_undocTag")
    let g:DoxygenToolkit_undocTag = "DOX_SKIP_BLOCK"
 endif
+if !exists("g:DoxygenToolkit_blockTag")
+   let g:DoxygenToolkit_blockTag = "@name "
+endif
 
 
 """"""""""""""""""""""""""
@@ -158,6 +168,8 @@ function! <SID>DoxygenCommentFunc()
 	 let l:argSep = ','
 	 let l:sep = "\ "
 	 let l:voidStr = "void"
+
+	 let l:classDef = 0
 	 
 	 " Store function in a buffer
 	 let l:lineBuffer = getline(line("."))
@@ -166,25 +178,32 @@ function! <SID>DoxygenCommentFunc()
 	 " Return of function can be defined on other line than the one the function
 	 " is defined.
 	 while ( l:lineBuffer !~ l:argBegin && l:count < 4 )
+		 " This is probbly a class (or something else definition)
+		 if ( l:lineBuffer =~ "{" )
+			 let l:classDef = 1
+			 break
+		 endif
 		 exec "normal j"
 		 let l:line = getline(line("."))
 		 let l:lineBuffer = l:lineBuffer . l:line
 		 let l:count = l:count + 1
 	 endwhile
-	 if ( l:count == 4 )
-		 return
-	 endif
-	 " Get the entire function
-	 let l:count = 0
-	 while ( l:lineBuffer !~ l:argEnd && l:count < 10 )
-		 exec "normal j"
-		 let l:line = getline(line("."))
-		 let l:lineBuffer = l:lineBuffer . l:line
-		 let l:count = l:count + 1
-	 endwhile
-	 " Function definition seem to be too long...
-	 if ( l:count == 10 )
-		 return
+	 if ( l:classDef == 0 )
+		 if ( l:count == 4 )
+			 return
+		 endif
+		 " Get the entire function
+		 let l:count = 0
+		 while ( l:lineBuffer !~ l:argEnd && l:count < 10 )
+			 exec "normal j"
+			 let l:line = getline(line("."))
+			 let l:lineBuffer = l:lineBuffer . l:line
+			 let l:count = l:count + 1
+		 endwhile
+		 " Function definition seem to be too long...
+		 if ( l:count == 10 )
+			 return
+		 endif
 	 endif
 
 	 " Start creating doxygen pattern
@@ -193,6 +212,12 @@ function! <SID>DoxygenCommentFunc()
 	 exec "normal ^c$" . g:DoxygenToolkit_blockFooter . "*/"
 	 exec "normal k"
 	 mark d
+
+	 " Class definition, let's start with brief tag
+	 if ( l:classDef == 1 )
+		 startinsert!
+		 return
+	 endif
 
 	 " Add return tag if function do not return void
 	 let l:beginPos = match(l:lineBuffer, l:voidStr)
@@ -215,32 +240,18 @@ function! <SID>DoxygenCommentFunc()
 	 exec "normal `d"
 	 let l:argList = 0		" ==0 -> no argument, !=0 -> at least one arg
 	 
-	 let l:beginBuf = 0
-	 let l:endBuf = 0
 	 let l:beginP = 0
 	 let l:endP = 0
 	 let l:prevBeginP = 0
 
 	 " Arguments start after opening parenthesis
-	 let l:beginBuf = match(l:lineBuffer, l:argBegin, l:beginP)
-	 if ( l:beginBuf == -1 )
-		 echo "Opening parenthesis not present !"
-		 return
-	 endif
-	 let l:beginP = l:beginBuf + 1
+	 let l:beginP = match(l:lineBuffer, l:argBegin, l:beginP) + 1
 	 let l:prevBeginP = l:beginP
 	 let l:endP = l:beginP
 
-	 " And stop before closing parenthesis
-	 let l:endBuf = match(l:lineBuffer, l:argEnd, l:beginBuf)
-	 if ( l:endBuf == -1 )
-		 echo "Closing parenthesis not present !"
-		 return
-	 endif
-
 	 " Test if there is something into parenthesis
 	 let l:beginP = l:beginP
-	 if ( l:beginP == l:endBuf )
+	 if ( l:beginP == match(l:lineBuffer, l:argEnd, l:beginP) )
 		 startinsert!
 		 return
 	 endif
@@ -353,6 +364,19 @@ endfunction
 
 
 """"""""""""""""""""""""""
+" DoxygenBlockFunc
+""""""""""""""""""""""""""
+function! <SID>DoxygenBlockFunc()
+	exec "normal o/**\n" . g:DoxygenToolkit_blockTag
+	mark d
+	exec "normal o@{ */\n/** @} */"
+	exec "normal `d"
+	startinsert!
+endfunction
+
+
+
+""""""""""""""""""""""""""
 " Extract the name of argument
 """"""""""""""""""""""""""
 function ReturnArgName(argBuf, beginP, endP)
@@ -422,3 +446,4 @@ command! -nargs=0 Dox :call <SID>DoxygenCommentFunc()
 command! -nargs=0 DoxLic :call <SID>DoxygenLicenseFunc()
 command! -nargs=0 DoxAuthor :call <SID>DoxygenAuthorFunc()
 command! -nargs=1 DoxUndoc :call <SID>DoxygenUndocumentFunc(<q-args>)
+command! -nargs=0 DoxBlock :call <SID>DoxygenBlockFunc()
