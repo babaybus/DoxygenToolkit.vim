@@ -177,9 +177,16 @@ endif
 if !exists("g:DoxygenToolkit_classTag")
 	let g:DoxygenToolkit_classTag = "@class "
 endif
-let g:DoxygenToolkit_startCommentTag = "/** "
-let g:DoxygenToolkit_interCommentTag = "* "
-let g:DoxygenToolkit_endCommentTag = "*/"
+
+if !exists("g:DoxygenToolkit_startCommentTag ")
+	let g:DoxygenToolkit_startCommentTag = "/** "
+endif
+if !exists("g:DoxygenToolkit_interCommentTag ")
+	let g:DoxygenToolkit_interCommentTag = "* "
+endif
+if !exists("g:DoxygenToolkit_endCommentTag ")
+	let g:DoxygenToolkit_endCommentTag = "*/"
+endif
 if exists("g:DoxygenToolkit_commentType")
 	if ( g:DoxygenToolkit_commentType == "C++" )
 		let g:DoxygenToolkit_startCommentTag = "/// "
@@ -187,6 +194,7 @@ if exists("g:DoxygenToolkit_commentType")
 		let g:DoxygenToolkit_endCommentTag = ""
 	endif
 endif
+
 if !exists("g:DoxygenToolkit_ignoreForReturn")
 	let g:DoxygenToolkit_ignoreForReturn = "inline static virtual void"
 else
