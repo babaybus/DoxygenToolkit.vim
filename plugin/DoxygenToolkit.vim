@@ -1,6 +1,6 @@
 " DoxygenToolkit.vim
 " Brief: Usefull tools for Doxygen (comment, author, license).
-" Version: 0.1.9
+" Version: 0.1.10
 " Date: 05/17/04
 " Author: Mathias Lorente
 "
@@ -184,6 +184,11 @@ if exists("g:DoxygenToolkit_commentType")
 		let g:DoxygenToolkit_endCommentTag = ""
 	endif
 endif
+if !exists("g:DoxygenToolkit_ignoreForReturn")
+	let g:DoxygenToolkit_ignoreForReturn = "inline static virtual void"
+else
+	let g:DoxygenToolkit_ignoreForReturn = g:DoxygenToolkit_ignoreForReturn . " inline static virtual void"
+endif
 
 
 """"""""""""""""""""""""""
@@ -264,22 +269,43 @@ function! <SID>DoxygenCommentFunc()
 		return
 	endif
 
-	" Add return tag if function do not return void
-	let l:beginPos = match(l:lineBuffer, l:voidStr)
-	let l:beginArgPos = match(l:lineBuffer, l:argBegin)
-	let l:firstSpace = match(l:lineBuffer, ' ')    " return seomething only if there is space before parenthesis
-	if ( ( l:beginPos == -1 || l:beginPos > l:beginArgPos ) && ( l:firstSpace != -1 && l:firstSpace < l:beginArgPos ) )
-		exec "normal o" . g:DoxygenToolkit_interCommentTag . "\<enter>" . g:DoxygenToolkit_interCommentTag . g:DoxygenToolkit_returnTag
-	endif
-
 	" Delete space just after and just before parenthesis
 	let l:lineBuffer = substitute(l:lineBuffer, "\t", "\ ", "g")
 	let l:lineBuffer = substitute(l:lineBuffer, "(\ ", "(", "")
 	let l:lineBuffer = substitute(l:lineBuffer, "\ )", ")", "")
 
+	" Delete recursively all double spaces
 	while ( match(l:lineBuffer, "\ \ ") != -1 )
 		let l:lineBuffer = substitute(l:lineBuffer, "\ \ ", "\ ", "g")
 	endwhile
+
+	" Delete first space (if any)
+	if ( match(l:lineBuffer, ' ') == 0 )
+		let l:lineBuffer = strpart(l:lineBuffer, 1)
+	endif
+
+	" Add return tag if function do not return void
+	let l:beginArgPos = match(l:lineBuffer, l:argBegin)
+	let l:beginP = 0	" Name can start at the beginning of l:lineBuffer, it is usually between spaces or space and parenthesis
+	let l:endP = 0
+	let l:returnFlag = -1	" At least one name (function name) do not correspond to the list of ignored values.
+	while ( l:endP != l:beginArgPos )
+		let l:endP = match(l:lineBuffer, ' ', l:beginP )
+		if ( l:endP > l:beginArgPos || l:endP == -1 )
+			let l:endP = l:beginArgPos
+		endif
+		let l:name = strpart(l:lineBuffer, l:beginP, l:endP - l:beginP)
+		let l:beginP = l:endP + 1
+		" Hack, because of '~' is not correctly interprated by match... if you
+		" have a solution, send me it !
+		if ( l:name[0] != '~' && match(g:DoxygenToolkit_ignoreForReturn, l:name) == -1 )
+			let l:returnFlag = l:returnFlag + 1
+		endif
+	endwhile
+	if ( l:returnFlag >= 1 )	
+		exec "normal o" . g:DoxygenToolkit_interCommentTag
+		exec "normal o" . g:DoxygenToolkit_interCommentTag . g:DoxygenToolkit_returnTag
+	endif
 
 	" Looking for argument name in line buffer
 	exec "normal `d"
