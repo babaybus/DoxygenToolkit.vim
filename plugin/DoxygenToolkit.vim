@@ -1,8 +1,12 @@
 " DoxygenToolkit.vim
 " Brief: Usefull tools for Doxygen (comment, author, license).
-" Version: 0.1.7
-" Date: 05/12/04
+" Version: 0.1.8
+" Date: 05/17/04
 " Author: Mathias Lorente
+"
+" Note: Changes made by Jason Mills:
+"   - Fixed \n bug which resulted in comments being screwed up
+"   - Added use of doxygen /// comments.
 "
 " Actually five purposes have been defined :
 "
@@ -44,9 +48,9 @@
 "
 " - Ignore code fragment :
 "   In vim, if you want to ignore all code fragment placed in a block such as :
-"   	#ifdef DEBUG
-"   	...
-"   	#endif
+"     #ifdef DEBUG
+"     ...
+"     #endif
 "   You only have to execute the command :DoxUndoc(DEBUG) !
 "   
 " - Group :
@@ -108,18 +112,18 @@ if exists("loaded_DoxygenToolkit")
 endif
 let loaded_DoxygenToolkit = 1
 "echo 'Loading DoxygenToolkit...'
-let s:licenseTag = "Copyright (C) \n\n"
-let s:licenseTag = s:licenseTag . "This program is free software; you can redistribute it and/or\n"
-let s:licenseTag = s:licenseTag . "modify it under the terms of the GNU General Public License\n"
-let s:licenseTag = s:licenseTag . "as published by the Free Software Foundation; either version 2\n"
-let s:licenseTag = s:licenseTag . "of the License, or (at your option) any later version.\n\n"
-let s:licenseTag = s:licenseTag . "This program is distributed in the hope that it will be useful,\n"
-let s:licenseTag = s:licenseTag . "but WITHOUT ANY WARRANTY; without even the implied warranty of\n"
-let s:licenseTag = s:licenseTag . "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the\n"
-let s:licenseTag = s:licenseTag . "GNU General Public License for more details.\n\n"
-let s:licenseTag = s:licenseTag . "You should have received a copy of the GNU General Public License\n"
-let s:licenseTag = s:licenseTag . "along with this program; if not, write to the Free Software\n"
-let s:licenseTag = s:licenseTag . "Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.\n"
+let s:licenseTag = "Copyright (C) \<enter>"
+let s:licenseTag = s:licenseTag . "This program is free software; you can redistribute it and/or\<enter>"
+let s:licenseTag = s:licenseTag . "modify it under the terms of the GNU General Public License\<enter>"
+let s:licenseTag = s:licenseTag . "as published by the Free Software Foundation; either version 2\<enter>"
+let s:licenseTag = s:licenseTag . "of the License, or (at your option) any later version.\<enter>\<enter>"
+let s:licenseTag = s:licenseTag . "This program is distributed in the hope that it will be useful,\<enter>"
+let s:licenseTag = s:licenseTag . "but WITHOUT ANY WARRANTY; without even the implied warranty of\<enter>"
+let s:licenseTag = s:licenseTag . "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the\<enter>"
+let s:licenseTag = s:licenseTag . "GNU General Public License for more details.\<enter>\<enter>"
+let s:licenseTag = s:licenseTag . "You should have received a copy of the GNU General Public License\<enter>"
+let s:licenseTag = s:licenseTag . "along with this program; if not, write to the Free Software\<enter>"
+let s:licenseTag = s:licenseTag . "Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.\<enter>"
 
 " Common standard constants
 if !exists("g:DoxygenToolkit_briefTag")
@@ -138,7 +142,7 @@ if !exists("g:DoxygenToolkit_blockFooter")
    let g:DoxygenToolkit_blockFooter = ""
 endif
 if !exists("g:DoxygenToolkit_licenseTag")
-	let g:DoxygenToolkit_licenseTag = s:licenseTag
+  let g:DoxygenToolkit_licenseTag = s:licenseTag
 endif
 if !exists("g:DoxygenToolkit_fileTag")
    let g:DoxygenToolkit_fileTag = "@file "
@@ -161,132 +165,141 @@ endif
 " Doxygen comment function 
 """"""""""""""""""""""""""
 function! <SID>DoxygenCommentFunc()
-	 " modif perso
-	 
-	 let l:argBegin = "\("
-	 let l:argEnd = "\)"
-	 let l:argSep = ','
-	 let l:sep = "\ "
-	 let l:voidStr = "void"
+   " modif perso
+   
+   let l:argBegin = "\("
+   let l:argEnd = "\)"
+   let l:argSep = ','
+   let l:sep = "\ "
+   let l:voidStr = "void"
 
-	 let l:classDef = 0
-	 
-	 " Store function in a buffer
-	 let l:lineBuffer = getline(line("."))
-	 mark d
-	 let l:count=1
-	 " Return of function can be defined on other line than the one the function
-	 " is defined.
-	 while ( l:lineBuffer !~ l:argBegin && l:count < 4 )
-		 " This is probbly a class (or something else definition)
-		 if ( l:lineBuffer =~ "{" )
-			 let l:classDef = 1
-			 break
-		 endif
-		 exec "normal j"
-		 let l:line = getline(line("."))
-		 let l:lineBuffer = l:lineBuffer . l:line
-		 let l:count = l:count + 1
-	 endwhile
-	 if ( l:classDef == 0 )
-		 if ( l:count == 4 )
-			 return
-		 endif
-		 " Get the entire function
-		 let l:count = 0
-		 while ( l:lineBuffer !~ l:argEnd && l:count < 10 )
-			 exec "normal j"
-			 let l:line = getline(line("."))
-			 let l:lineBuffer = l:lineBuffer . l:line
-			 let l:count = l:count + 1
-		 endwhile
-		 " Function definition seem to be too long...
-		 if ( l:count == 10 )
-			 return
-		 endif
-	 endif
+   let l:classDef = 0
 
-	 " Start creating doxygen pattern
-	 exec "normal `d" 
-	 exec "normal O/**" . g:DoxygenToolkit_blockHeader . "\n" . g:DoxygenToolkit_briefTag . "\n"
-	 exec "normal ^c$" . g:DoxygenToolkit_blockFooter . "*/"
-	 exec "normal k"
-	 mark d
+   " Make comment tag.
+   let l:comTag = MakeIndent() . "/// "
+   
+   " Store function in a buffer
+   let l:lineBuffer = getline(line("."))
+   mark d
+   let l:count=1
+   " Return of function can be defined on other line than the one the function
+   " is defined.
+   while ( l:lineBuffer !~ l:argBegin && l:count < 4 )
+     " This is probbly a class (or something else definition)
+     if ( l:lineBuffer =~ "{" )
+       let l:classDef = 1
+       break
+     endif
+     exec "normal j"
+     let l:line = getline(line("."))
+     let l:lineBuffer = l:lineBuffer . l:line
+     let l:count = l:count + 1
+   endwhile
+   if ( l:classDef == 0 )
+     if ( l:count == 4 )
+       return
+     endif
+     " Get the entire function
+     let l:count = 0
+     while ( l:lineBuffer !~ l:argEnd && l:count < 10 )
+       exec "normal j"
+       let l:line = getline(line("."))
+       let l:lineBuffer = l:lineBuffer . l:line
+       let l:count = l:count + 1
+     endwhile
+     " Function definition seem to be too long...
+     if ( l:count == 10 )
+       return
+     endif
+   endif
 
-	 " Class definition, let's start with brief tag
-	 if ( l:classDef == 1 )
-		 startinsert!
-		 return
-	 endif
+   " Start creating doxygen pattern
+   exec "normal `d" 
+"  exec "normal O/**" . g:DoxygenToolkit_blockHeader . "\n" . g:DoxygenToolkit_briefTag . "\n"
+"  exec "normal ^c$" . g:DoxygenToolkit_blockFooter . "*/"
+   exec "normal k"
+   call AppendText(l:comTag . g:DoxygenToolkit_blockHeader)
+   call AppendText(l:comTag . g:DoxygenToolkit_briefTag)
+   call AppendText(l:comTag . g:DoxygenToolkit_blockFooter)
+   exec "normal k"
+   mark d
 
-	 " Add return tag if function do not return void
-	 let l:beginPos = match(l:lineBuffer, l:voidStr)
-	 let l:beginArgPos = match(l:lineBuffer, l:argBegin)
-	 let l:firstSpace = match(l:lineBuffer, ' ')		" return seomething only if there is space before parenthesis
-	 if ( ( l:beginPos == -1 || l:beginPos > l:beginArgPos ) && ( l:firstSpace != -1 && l:firstSpace < l:beginArgPos ) )
-		 exec "normal o\n" . g:DoxygenToolkit_returnTag
-	 endif
+   " Class definition, let's start with brief tag
+   if ( l:classDef == 1 )
+     startinsert!
+     return
+   endif
 
-	 " Delete space just after and just before parenthesis
-	 let l:lineBuffer = substitute(l:lineBuffer, "\t", "\ ", "g")
-	 let l:lineBuffer = substitute(l:lineBuffer, "(\ ", "(", "")
-	 let l:lineBuffer = substitute(l:lineBuffer, "\ )", ")", "")
+   " Add return tag if function do not return void
+   let l:beginPos = match(l:lineBuffer, l:voidStr)
+   let l:beginArgPos = match(l:lineBuffer, l:argBegin)
+   let l:firstSpace = match(l:lineBuffer, ' ')    " return seomething only if there is space before parenthesis
+   if ( ( l:beginPos == -1 || l:beginPos > l:beginArgPos ) && ( l:firstSpace != -1 && l:firstSpace < l:beginArgPos ) )
+"     exec "normal o\n" . g:DoxygenToolkit_returnTag
+     call AppendText(l:comTag . g:DoxygenToolkit_returnTag)
+   endif
 
-	 while ( match(l:lineBuffer, "\ \ ") != -1 )
-		 let l:lineBuffer = substitute(l:lineBuffer, "\ \ ", "\ ", "g")
-	 endwhile
+   " Delete space just after and just before parenthesis
+   let l:lineBuffer = substitute(l:lineBuffer, "\t", "\ ", "g")
+   let l:lineBuffer = substitute(l:lineBuffer, "(\ ", "(", "")
+   let l:lineBuffer = substitute(l:lineBuffer, "\ )", ")", "")
 
-	 " Looking for argument name in line buffer
-	 exec "normal `d"
-	 let l:argList = 0		" ==0 -> no argument, !=0 -> at least one arg
-	 
-	 let l:beginP = 0
-	 let l:endP = 0
-	 let l:prevBeginP = 0
+   while ( match(l:lineBuffer, "\ \ ") != -1 )
+     let l:lineBuffer = substitute(l:lineBuffer, "\ \ ", "\ ", "g")
+   endwhile
 
-	 " Arguments start after opening parenthesis
-	 let l:beginP = match(l:lineBuffer, l:argBegin, l:beginP) + 1
-	 let l:prevBeginP = l:beginP
-	 let l:endP = l:beginP
+   " Looking for argument name in line buffer
+   exec "normal `d"
+   let l:argList = 0    " ==0 -> no argument, !=0 -> at least one arg
+   
+   let l:beginP = 0
+   let l:endP = 0
+   let l:prevBeginP = 0
 
-	 " Test if there is something into parenthesis
-	 let l:beginP = l:beginP
-	 if ( l:beginP == match(l:lineBuffer, l:argEnd, l:beginP) )
-		 startinsert!
-		 return
-	 endif
+   " Arguments start after opening parenthesis
+   let l:beginP = match(l:lineBuffer, l:argBegin, l:beginP) + 1
+   let l:prevBeginP = l:beginP
+   let l:endP = l:beginP
 
-	 " Enter into main loop
-	 while ( l:beginP > 0 && l:endP > 0 )
+   " Test if there is something into parenthesis
+   let l:beginP = l:beginP
+   if ( l:beginP == match(l:lineBuffer, l:argEnd, l:beginP) )
+     startinsert!
+     return
+   endif
 
-		 " Looking for arg separator
-		 let l:endP1 = match(l:lineBuffer, l:argSep, l:beginP)
-		 let l:endP = match(l:lineBuffer, l:argEnd, l:beginP)
-		 if ( l:endP1 != -1 && l:endP1 < l:endP )
-			 let l:endP = l:endP1
-		 endif
-		 let l:endP = l:endP - 1
+   " Enter into main loop
+   while ( l:beginP > 0 && l:endP > 0 )
 
-		 if ( l:endP > 0 )
-			let l:strBuf = ReturnArgName(l:lineBuffer, l:beginP, l:endP)
-			" void parameter
-			if ( l:strBuf == l:voidStr )
-				startinsert!
-				break
-			endif
-			exec "normal o" . g:DoxygenToolkit_paramTag . l:strBuf
-			let l:beginP = l:endP + 2
-			let l:argList = 1
-		 endif
-	 endwhile
+     " Looking for arg separator
+     let l:endP1 = match(l:lineBuffer, l:argSep, l:beginP)
+     let l:endP = match(l:lineBuffer, l:argEnd, l:beginP)
+     if ( l:endP1 != -1 && l:endP1 < l:endP )
+       let l:endP = l:endP1
+     endif
+     let l:endP = l:endP - 1
 
-	 " Add blank line if necessary
-	 if ( l:argList != 0 )
-		 exec "normal `do"
-	 endif
-	 
-	 " move the cursor to the correct position (after brief tag)
-	 exec "normal `d"
+     if ( l:endP > 0 )
+      let l:strBuf = ReturnArgName(l:lineBuffer, l:beginP, l:endP)
+      " void parameter
+      if ( l:strBuf == l:voidStr )
+        startinsert!
+        break
+      endif
+"      exec "normal o" . g:DoxygenToolkit_paramTag . l:strBuf
+       call AppendText(l:comTag . g:DoxygenToolkit_paramTag . l:strBuf)
+      let l:beginP = l:endP + 2
+      let l:argList = 1
+     endif
+   endwhile
+
+   " Add blank line if necessary
+   if ( l:argList != 0 )
+     exec "normal `do"
+   endif
+   
+   " move the cursor to the correct position (after brief tag)
+   exec "normal `d"
     startinsert!
 endfunction
 
@@ -295,18 +308,19 @@ endfunction
 " Doxygen license comment
 """"""""""""""""""""""""""
 function! <SID>DoxygenLicenseFunc()
-	" Test authorName variable
-	if !exists("g:DoxygenToolkit_authorName")
-		let g:DoxygenToolkit_authorName = input("Enter name of the author (generally yours...) : ")
-	endif
-	mark d
-	let l:date = strftime("%Y")
-	exec "normal O/**\n" . g:DoxygenToolkit_licenseTag
-   exec "normal ^c$*/"
-	if ( g:DoxygenToolkit_licenseTag == s:licenseTag )
-		exec "normal %jA" . l:date . " - " . g:DoxygenToolkit_authorName
-	endif
-	exec "normal `d"
+  " Test authorName variable
+  if !exists("g:DoxygenToolkit_authorName")
+    let g:DoxygenToolkit_authorName = input("Enter name of the author (generally yours...) : ")
+  endif
+  mark d
+  let l:date = strftime("%Y")
+"  exec "normal O/**\n" . g:DoxygenToolkit_licenseTag
+  exec "normal O/*\<Enter>" . g:DoxygenToolkit_licenseTag
+  exec "normal ^c$*/"
+  if ( g:DoxygenToolkit_licenseTag == s:licenseTag )
+    exec "normal %jA" . l:date . " - " . g:DoxygenToolkit_authorName
+  endif
+  exec "normal `d"
 endfunction
 
 
@@ -314,33 +328,40 @@ endfunction
 " Doxygen author comment
 """"""""""""""""""""""""""
 function! <SID>DoxygenAuthorFunc()
-	" Test authorName variable
-	if !exists("g:DoxygenToolkit_authorName")
-		let g:DoxygenToolkit_authorName = input("Enter name of the author (generally yours...) : ")
-	endif
+  " Test authorName variable
+  if !exists("g:DoxygenToolkit_authorName")
+    let g:DoxygenToolkit_authorName = input("Enter name of the author (generally yours...) : ")
+  endif
 
-	" Get file name
-	let l:beginP = 0
-	let l:prevBeginP = 0
-	while ( l:beginP != -1 )
-		let l:prevBeginP = l:beginP
-		let l:beginP = match(argv(0), '/', l:prevBeginP + 1)
-	endwhile
-	let l:fileName = strpart(argv(0), l:prevBeginP)
-	
-	" Begin to write skeleton
-	exec "normal O/**\n" . g:DoxygenToolkit_fileTag . l:fileName
-	exec "normal o" . g:DoxygenToolkit_briefTag
-	" Deplace mark to brief if author name is defined
-	mark d
-	exec "normal o" . g:DoxygenToolkit_authorTag . g:DoxygenToolkit_authorName
-	let l:date = strftime("%Y-%m-%d")
-	exec "normal o" . g:DoxygenToolkit_dateTag . l:date ."\n"
-	exec "normal ^c$*/"
+  " Get file name
+  let l:beginP = 0
+  let l:prevBeginP = 0
+  while ( l:beginP != -1 )
+    let l:prevBeginP = l:beginP
+    let l:beginP = match(argv(0), '/', l:prevBeginP + 1)
+  endwhile
+  let l:fileName = strpart(argv(0), l:prevBeginP)
+  
+  " Begin to write skeleton
+"  exec "normal O/**\n" . g:DoxygenToolkit_fileTag . l:fileName
+  exec "normal O"
+  call AppendText("///")
+  call AppendText("/// " . g:DoxygenToolkit_fileTag . l:fileName)
+"  exec "normal o" . g:DoxygenToolkit_briefTag
+  call AppendText("/// " . g:DoxygenToolkit_briefTag)
+  " Deplace mark to brief if author name is defined
+  mark d
+"  exec "normal o" . g:DoxygenToolkit_authorTag . g:DoxygenToolkit_authorName
+  call AppendText("/// " . g:DoxygenToolkit_authorTag . g:DoxygenToolkit_authorName)
+  let l:date = strftime("%Y-%m-%d")
+"  exec "normal o" . g:DoxygenToolkit_dateTag . l:date ."\n"
+  call AppendText("/// " . g:DoxygenToolkit_dateTag . l:date)
+  call AppendText("///")
+"  exec "normal ^c$*/"
 
-	" Replace the cursor to the rigth position
-	exec "normal `d"
-	startinsert!
+  " Replace the cursor to the rigth position
+  exec "normal `d"
+  startinsert!
 endfunction
 
 
@@ -349,17 +370,18 @@ endfunction
 """"""""""""""""""""""""""
 function! <SID>DoxygenUndocumentFunc(blockTag)
 	let l:search = "#ifdef " . a:blockTag
-	" Save cursor position and go to the begining of the file
-	mark d
-	exec "normal gg"
+  " Save cursor position and go to the begining of the file
+  mark d
+  exec "normal gg"
 
 	while ( search(l:search, 'W') != 0 )
-		exec "normal O#ifndef " . g:DoxygenToolkit_undocTag
-		exec "normal j^%"
-		exec "normal o#endif /* " . g:DoxygenToolkit_undocTag . " */"
-	endwhile
+    exec "normal O#ifndef " . g:DoxygenToolkit_undocTag
+    exec "normal j^%"
+"    exec "normal o#endif /* " . g:DoxygenToolkit_undocTag . " */"
+    exec "normal o#endif // " . g:DoxygenToolkit_undocTag 
+  endwhile
 
-	exec "normal `d"
+  exec "normal `d"
 endfunction
 
 
@@ -368,73 +390,88 @@ endfunction
 " DoxygenBlockFunc
 """"""""""""""""""""""""""
 function! <SID>DoxygenBlockFunc()
-	exec "normal o/**\n" . g:DoxygenToolkit_blockTag
-	mark d
-	exec "normal o@{ */\n/** @} */"
-	exec "normal `d"
-	startinsert!
+  exec "normal o/**\<enter>" . g:DoxygenToolkit_blockTag
+  mark d
+  exec "normal o@{ */\<enter>/** @} */"
+  exec "normal `d"
+  startinsert!
 endfunction
 
+function! AppendText(text)
+  call append(line("."), a:text)
+  exec "normal j" 
+endfunction
 
+"
+" Returns the indentations level for a line
+" MakeIndent([lineNum])
+"
+function! MakeIndent(...)
+   let line = getline(".")
+   if a:0 == 1 
+      let line = getline(a:1)
+   endif
+   return matchstr(line, '^\s*')
+endfunction
 
 """"""""""""""""""""""""""
 " Extract the name of argument
 """"""""""""""""""""""""""
 function ReturnArgName(argBuf, beginP, endP)
-	
-	" Name of argument is at the end of argBuf if no default (id arg = 0)
-	let l:equalP = match(a:argBuf, "=", a:beginP)
-	if ( l:equalP == -1 || l:equalP > a:endP )
-		" Look for arg name begining
-		let l:beginP = a:beginP 
-		let l:prevBeginP = l:beginP
-		while ( l:beginP < a:endP && l:beginP != -1 )
-			let l:prevBeginP = l:beginP
-			let l:beginP = match(a:argBuf, " ", l:beginP + 1)
-		endwhile
-		let l:beginP = l:prevBeginP
-		let l:endP = a:endP
-	else
-		" Look for arg name begining
-		let l:addPos = 0
-		let l:beginP = a:beginP
-		let l:prevBeginP = l:beginP
-		let l:doublePrevBeginP = l:prevBeginP
-		while ( l:beginP < l:equalP && l:beginP != -1 )
-			let l:doublePrevBeginP = l:prevBeginP
-			let l:prevBeginP = l:beginP + l:addPos
-			let l:beginP = match(a:argBuf, " ", l:beginP + 1)
-			let l:addPos = 1
-		endwhile
+  
+  " Name of argument is at the end of argBuf if no default (id arg = 0)
+  let l:equalP = match(a:argBuf, "=", a:beginP)
+  if ( l:equalP == -1 || l:equalP > a:endP )
+    " Look for arg name begining
+    let l:beginP = a:beginP 
+    let l:prevBeginP = l:beginP
+    while ( l:beginP < a:endP && l:beginP != -1 )
+      let l:prevBeginP = l:beginP
+      let l:beginP = match(a:argBuf, " ", l:beginP + 1)
+    endwhile
+    let l:beginP = l:prevBeginP
+    let l:endP = a:endP
+  else
+    " Look for arg name begining
+    let l:addPos = 0
+    let l:beginP = a:beginP
+    let l:prevBeginP = l:beginP
+    let l:doublePrevBeginP = l:prevBeginP
+    while ( l:beginP < l:equalP && l:beginP != -1 )
+      let l:doublePrevBeginP = l:prevBeginP
+      let l:prevBeginP = l:beginP + l:addPos
+      let l:beginP = match(a:argBuf, " ", l:beginP + 1)
+      let l:addPos = 1
+    endwhile
 
-		" Space just before equal
-		if ( l:prevBeginP == l:equalP )
-			let l:beginP = l:doublePrevBeginP
-			let l:endP = l:prevBeginP - 2
-		else
-			" No space just before so...
-			let l:beginP = l:prevBeginP
-			let l:endP = l:equalP - 1
-		endif
-	endif
-	
-	" We have the begining position and the ending position...
-	let l:newBuf = strpart(a:argBuf, l:beginP, l:endP - l:beginP + 1)
+    " Space just before equal
+    if ( l:prevBeginP == l:equalP )
+      let l:beginP = l:doublePrevBeginP
+      let l:endP = l:prevBeginP - 2
+    else
+      " No space just before so...
+      let l:beginP = l:prevBeginP
+      let l:endP = l:equalP - 1
+    endif
+  endif
+  
+  " We have the begining position and the ending position...
+  let l:newBuf = strpart(a:argBuf, l:beginP, l:endP - l:beginP + 1)
 
-	" Delete leading '*' or '&'
-	if ( match(l:newBuf, "*") == 1 || match(l:newBuf, "&") == 1 )
-		let l:newBuf = strpart(l:newBuf, 2)
-	endif
+  " Delete leading '*' or '&'
+  if ( match(l:newBuf, "*") == 1 || match(l:newBuf, "&") == 1 )
+    let l:newBuf = strpart(l:newBuf, 2)
+  endif
 
-	" Delete tab definition ([])
-	let l:delTab = match(newBuf, "[") 
-	if ( l:delTab != -1 )
-		let l:newBuf = strpart(l:newBuf, 0, l:delTab)
-	endif
+  " Delete tab definition ([])
+  let l:delTab = match(newBuf, "[") 
+  if ( l:delTab != -1 )
+    let l:newBuf = strpart(l:newBuf, 0, l:delTab)
+  endif
 
-	" Eventually clean argument name...
-	let l:newBuf = substitute(l:newBuf, " ", "", "g")
-	return l:newBuf
+  " Eventually clean argument name...
+  let l:newBuf = substitute(l:newBuf, " ", "", "g")
+  return l:newBuf
 
 endfunction
 
