@@ -1,9 +1,14 @@
 " DoxygenToolkit.vim
 " Brief: Usefull tools for Doxygen (comment, author, license).
-" Version: 0.1.11
+" Version: 0.1.12
 " Date: 05/17/04
 " Author: Mathias Lorente
 "
+" Note: Changes suggested by Soh Kok Hong:
+"   - Fixed indentation in comments
+"     ( no more /**               /**
+"                 *       but      *
+"                 */               */     )
 " Note: Changes made by Jason Mills:
 "   - Fixed \n bug which resulted in comments being screwed up
 "   - Added use of doxygen /// comments.
@@ -206,8 +211,11 @@ endif
 " Doxygen comment function 
 """"""""""""""""""""""""""
 function! <SID>DoxygenCommentFunc()
-	" modif perso
-
+	" Store indentation
+	let l:oldcinoptions = &cinoptions
+	" Set new indentation
+	let &cinoptions="c1C1"
+	
 	let l:argBegin = "\("
 	let l:argEnd = "\)"
 	let l:argSep = ','
@@ -241,6 +249,8 @@ function! <SID>DoxygenCommentFunc()
 		if ( l:count == 4 )
 			" Restore standard comment expension
 			let &comments = l:oldComments 
+			" Restore indentation
+			let &cinoptions = l:oldcinoptions
 			return
 		endif
 		" Get the entire function
@@ -255,6 +265,8 @@ function! <SID>DoxygenCommentFunc()
 		if ( l:count == 10 )
 			" Restore standard comment expension
 			let &comments = l:oldComments 
+			" Restore indentation
+			let &cinoptions = l:oldcinoptions
 			return
 		endif
 	endif
@@ -275,6 +287,8 @@ function! <SID>DoxygenCommentFunc()
 	if ( l:classDef == 1 )
 		" Restore standard comment expension
 		let &comments = l:oldComments 
+		" Restore indentation
+		let &cinoptions = l:oldcinoptions
 
 		startinsert!
 		return
@@ -336,6 +350,8 @@ function! <SID>DoxygenCommentFunc()
 	if ( l:beginP == match(l:lineBuffer, l:argEnd, l:beginP) )
 		" Restore standard comment expension
 		let &comments = l:oldComments 
+		" Restore indentation
+		let &cinoptions = l:oldcinoptions
 
 		startinsert!
 		return
@@ -358,6 +374,8 @@ function! <SID>DoxygenCommentFunc()
 			if ( l:strBuf == l:voidStr )
 				" Restore standard comment expension
 				let &comments = l:oldComments 
+				" Restore indentation
+				let &cinoptions = l:oldcinoptions
 				
 				startinsert!
 				break
@@ -378,6 +396,8 @@ function! <SID>DoxygenCommentFunc()
 	 
 	" Restore standard comment expension
 	let &comments = l:oldComments 
+	" Restore indentation
+	let &cinoptions = l:oldcinoptions
 
 	startinsert!
 endfunction
@@ -387,6 +407,11 @@ endfunction
 " Doxygen license comment
 """"""""""""""""""""""""""
 function! <SID>DoxygenLicenseFunc()
+	" Store indentation
+	let l:oldcinoptions = &cinoptions
+	" Set new indentation
+	let &cinoptions="c1C1"
+
 	" Test authorName variable
 	if !exists("g:DoxygenToolkit_authorName")
 		let g:DoxygenToolkit_authorName = input("Enter name of the author (generally yours...) : ")
@@ -399,6 +424,9 @@ function! <SID>DoxygenLicenseFunc()
 		exec "normal %jA" . l:date . " - " . g:DoxygenToolkit_authorName
 	endif
 	exec "normal `d"
+
+	" Restore indentation
+	let &cinoptions = l:oldcinoptions
 endfunction
 
 
@@ -409,6 +437,10 @@ function! <SID>DoxygenAuthorFunc()
 	" Save standard comment expension
 	let l:oldComments = &comments
 	let &comments = ""
+	" Store indentation
+	let l:oldcinoptions = &cinoptions
+	" Set new indentation
+	let &cinoptions="c1C1"
 
 	" Test authorName variable
 	if !exists("g:DoxygenToolkit_authorName")
@@ -437,6 +469,8 @@ function! <SID>DoxygenAuthorFunc()
 
 	" Restore standard comment expension
 	let &comments = l:oldComments
+	" Restore indentation
+	let &cinoptions = l:oldcinoptions
 	startinsert!
 endfunction
 
@@ -472,6 +506,10 @@ function! <SID>DoxygenBlockFunc()
 	" Save standard comment expension
 	let l:oldComments = &comments
 	let &comments = ""
+	" Store indentation
+	let l:oldcinoptions = &cinoptions
+	" Set new indentation
+	let &cinoptions="c1C1"
 
 	exec "normal o" . g:DoxygenToolkit_startCommentTag
 	exec "normal o" . g:DoxygenToolkit_interCommentTag . g:DoxygenToolkit_blockTag
@@ -482,6 +520,8 @@ function! <SID>DoxygenBlockFunc()
 	
 	" Restore standard comment expension
 	let &comments = l:oldComments
+	" Restore indentation
+	let &cinoptions = l:oldcinoptions
 	startinsert!
 endfunction
 
