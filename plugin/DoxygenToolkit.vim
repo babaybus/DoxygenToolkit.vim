@@ -1,6 +1,6 @@
 " DoxygenToolkit.vim
 " Brief: Usefull tools for Doxygen (comment, author, license).
-" Version: 0.1.10
+" Version: 0.1.11
 " Date: 05/17/04
 " Author: Mathias Lorente
 "
@@ -12,6 +12,9 @@
 "     has not been open directly on commamd line.
 "   - Now /// or /** doxygen comments are correctly integrated (except for
 "     license).
+" Note: Changes made by Mathias Lorente on 08/02/04
+"   - Now include only filename in author comment (no more folder...)
+"   - Fixed errors with function with no indentation.
 "
 "
 " Actually five purposes have been defined :
@@ -213,17 +216,17 @@ function! <SID>DoxygenCommentFunc()
 	let l:lineBuffer = getline(line("."))
 	mark d
 	let l:count=1
-	" Return of function can be defined on other line than the one the function
-	" is defined.
+	" Return of function can be defined on other line than the one of the 
+	" function.
 	while ( l:lineBuffer !~ l:argBegin && l:count < 4 )
 		" This is probbly a class (or something else definition)
-		if ( l:lineBuffer =~ "{" )
+		if ( l:lineBuffer =~ "{" || l:lineBuffer =~ ";" )
 			let l:classDef = 1
 			break
 		endif
 		exec "normal j"
 		let l:line = getline(line("."))
-		let l:lineBuffer = l:lineBuffer . l:line
+		let l:lineBuffer = l:lineBuffer . ' ' . l:line
 		let l:count = l:count + 1
 	endwhile
 	if ( l:classDef == 0 )
@@ -237,7 +240,7 @@ function! <SID>DoxygenCommentFunc()
 		while ( l:lineBuffer !~ l:argEnd && l:count < 10 )
 			exec "normal j"
 			let l:line = getline(line("."))
-			let l:lineBuffer = l:lineBuffer . l:line
+			let l:lineBuffer = l:lineBuffer . ' ' . l:line
 			let l:count = l:count + 1
 		endwhile
 		" Function definition seem to be too long...
@@ -405,7 +408,7 @@ function! <SID>DoxygenAuthorFunc()
 	endif
 
 	" Get file name
-	let l:fileName = expand('%')
+	let l:fileName = expand('%:t')
 
 	" Begin to write skeleton
 	exec "normal O" . g:DoxygenToolkit_startCommentTag
