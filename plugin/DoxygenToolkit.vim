@@ -1,9 +1,21 @@
 " DoxygenToolkit.vim
 " Brief: Usefull tools for Doxygen (comment, author, license).
-" Version: 0.1.12
+" Version: 0.1.13
 " Date: 05/17/04
 " Author: Mathias Lorente
 "
+" Note: Changes for linux kernel comment style
+"   - New option are available for brief tag and parameter tag ! Now there is
+"     a pre and a post tag for each of these tag.
+"   - You can define 'let g:DoxygenToolkit_briefTag_funcName = "yes"' to add
+"     the name of commented function between pre-brief tag and post-brief tag.
+"   - With these new features you can get something like:
+"     /**
+"      * @brief MyFunction -
+"      *
+"      * @param foo:
+"      * @param bar:
+"      */
 " Note: Changes suggested by Soh Kok Hong:
 "   - Fixed indentation in comments
 "     ( no more /**               /**
@@ -115,8 +127,8 @@
 " .vimrc.
 "
 " For example, my .vimrc contains:
-" let g:DoxygenToolkit_briefTag="@Synopsis  "
-" let g:DoxygenToolkit_paramTag="@Param "
+" let g:DoxygenToolkit_briefTag_pre="@Synopsis  "
+" let g:DoxygenToolkit_paramTag_pre="@Param "
 " let g:DoxygenToolkit_returnTag="@Returns   "
 " let g:DoxygenToolkit_blockHeader="--------------------------------------------------------------------------"
 " let g:DoxygenToolkit_blockFooter="----------------------------------------------------------------------------"
@@ -146,11 +158,17 @@ let s:licenseTag = s:licenseTag . "along with this program; if not, write to the
 let s:licenseTag = s:licenseTag . "Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.\<enter>"
 
 " Common standard constants
-if !exists("g:DoxygenToolkit_briefTag")
-	let g:DoxygenToolkit_briefTag = "@brief "
+if !exists("g:DoxygenToolkit_briefTag_pre")
+	let g:DoxygenToolkit_briefTag_pre = "@brief "
 endif
-if !exists("g:DoxygenToolkit_paramTag")
-	let g:DoxygenToolkit_paramTag = "@param "
+if !exists("g:DoxygenToolkit_briefTag_post")
+	let g:DoxygenToolkit_briefTag_post = ""
+endif
+if !exists("g:DoxygenToolkit_paramTag_pre")
+	let g:DoxygenToolkit_paramTag_pre = "@param "
+endif
+if !exists("g:DoxygenToolkit_paramTag_post")
+	let g:DoxygenToolkit_paramTag_post = " "
 endif
 if !exists("g:DoxygenToolkit_returnTag")
 	let g:DoxygenToolkit_returnTag = "@return "
@@ -204,6 +222,11 @@ if !exists("g:DoxygenToolkit_ignoreForReturn")
 	let g:DoxygenToolkit_ignoreForReturn = "inline static virtual void"
 else
 	let g:DoxygenToolkit_ignoreForReturn = g:DoxygenToolkit_ignoreForReturn . " inline static virtual void"
+endif
+
+" Add name of function after pre brief tag if you want
+if !exists("g:DoxygenToolkit_briefTag_funcName")
+	let g:DoxygenToolkit_briefTag_funcName = "no"
 endif
 
 
@@ -274,7 +297,7 @@ function! <SID>DoxygenCommentFunc()
 	" Start creating doxygen pattern
 	exec "normal `d" 
 	exec "normal O" . g:DoxygenToolkit_startCommentTag . g:DoxygenToolkit_blockHeader
-	exec "normal o" . g:DoxygenToolkit_interCommentTag . g:DoxygenToolkit_briefTag
+	exec "normal o" . g:DoxygenToolkit_interCommentTag . g:DoxygenToolkit_briefTag_pre
 	mark d
 	if ( g:DoxygenToolkit_endCommentTag == "" )
 		exec "normal o" . g:DoxygenToolkit_startCommentTag . g:DoxygenToolkit_blockFooter
@@ -294,20 +317,43 @@ function! <SID>DoxygenCommentFunc()
 		return
 	endif
 
-	" Delete space just after and just before parenthesis
+	" Replace tabs by space
 	let l:lineBuffer = substitute(l:lineBuffer, "\t", "\ ", "g")
-	let l:lineBuffer = substitute(l:lineBuffer, "(\ ", "(", "")
-	let l:lineBuffer = substitute(l:lineBuffer, "\ )", ")", "")
 
 	" Delete recursively all double spaces
 	while ( match(l:lineBuffer, "\ \ ") != -1 )
 		let l:lineBuffer = substitute(l:lineBuffer, "\ \ ", "\ ", "g")
 	endwhile
 
+	" Delete space just after and just before parenthesis
+	" Remove space between function name and opening paenthesis
+	let l:lineBuffer = substitute(l:lineBuffer, "(\ ", "(", "")
+	let l:lineBuffer = substitute(l:lineBuffer, "\ )", ")", "")
+	let l:lineBuffer = substitute(l:lineBuffer, "\ (", "(", "")
+
 	" Delete first space (if any)
 	if ( match(l:lineBuffer, ' ') == 0 )
 		let l:lineBuffer = strpart(l:lineBuffer, 1)
 	endif
+
+	" Add function name if requiered
+	if ( g:DoxygenToolkit_briefTag_funcName =~ "yes" )
+		let l:beginP = 0
+		let l:currentP = -1
+		let l:endP = match( l:lineBuffer, l:argBegin )
+		while ( l:currentP < l:endP )
+			let l:beginP = l:currentP + 1
+			let l:currentP = match( l:lineBuffer, ' ', l:beginP )
+			if ( l:currentP == -1 )
+				let l:currentP = l:endP
+			endif
+		endwhile
+		let l:name = strpart( l:lineBuffer, l:beginP, l:endP - l:beginP )
+		exec "normal A" . l:name
+	endif
+
+	" Now can add brief post tag
+	exec "normal A" . g:DoxygenToolkit_briefTag_post
 
 	" Add return tag if function do not return void
 	let l:beginArgPos = match(l:lineBuffer, l:argBegin)
@@ -380,7 +426,7 @@ function! <SID>DoxygenCommentFunc()
 				startinsert!
 				break
 			endif
-			exec "normal o" . g:DoxygenToolkit_interCommentTag . g:DoxygenToolkit_paramTag . l:strBuf . " "
+			exec "normal o" . g:DoxygenToolkit_interCommentTag . g:DoxygenToolkit_paramTag_pre . l:strBuf . g:DoxygenToolkit_paramTag_post
 			let l:beginP = l:endP + 2
 			let l:argList = 1
 		endif
@@ -453,7 +499,7 @@ function! <SID>DoxygenAuthorFunc()
 	" Begin to write skeleton
 	exec "normal O" . g:DoxygenToolkit_startCommentTag
 	exec "normal o" . g:DoxygenToolkit_interCommentTag . g:DoxygenToolkit_fileTag . l:fileName
-	exec "normal o" . g:DoxygenToolkit_interCommentTag . g:DoxygenToolkit_briefTag
+	exec "normal o" . g:DoxygenToolkit_interCommentTag . g:DoxygenToolkit_briefTag_pre
 	mark d
 	exec "normal o" . g:DoxygenToolkit_interCommentTag . g:DoxygenToolkit_authorTag . g:DoxygenToolkit_authorName
 	let l:date = strftime("%Y-%m-%d")
