@@ -1,9 +1,17 @@
 " DoxygenToolkit.vim
 " Brief: Usefull tools for Doxygen (comment, author, license).
-" Version: 0.1.13
-" Date: 05/17/04
+" Version: 0.1.14
+" Date: 11/04/06
 " Author: Mathias Lorente
 "
+" Note: Changes to customize cinoptions
+"   - New option available for cinoptions : g:DoxygenToolkit_cinoptions
+"     (default value is still c1C1)
+"     Thanks to Arnaud GODET for this. Now comment can have the following
+"     look:
+"     /**                      /**
+"     *       and not only     *
+"     */                       */
 " Note: Changes for linux kernel comment style
 "   - New option are available for brief tag and parameter tag ! Now there is
 "     a pre and a post tag for each of these tag.
@@ -201,6 +209,9 @@ if !exists("g:DoxygenToolkit_classTag")
 	let g:DoxygenToolkit_classTag = "@class "
 endif
 
+if !exists("g:DoxygenToolkit_cinoptions")
+    let g:DoxygenToolkit_cinoptions = "c1C1"
+endif
 if !exists("g:DoxygenToolkit_startCommentTag ")
 	let g:DoxygenToolkit_startCommentTag = "/** "
 endif
@@ -237,7 +248,7 @@ function! <SID>DoxygenCommentFunc()
 	" Store indentation
 	let l:oldcinoptions = &cinoptions
 	" Set new indentation
-	let &cinoptions="c1C1"
+	let &cinoptions=g:DoxygenToolkit_cinoptions
 	
 	let l:argBegin = "\("
 	let l:argEnd = "\)"
@@ -456,7 +467,7 @@ function! <SID>DoxygenLicenseFunc()
 	" Store indentation
 	let l:oldcinoptions = &cinoptions
 	" Set new indentation
-	let &cinoptions="c1C1"
+	let &cinoptions=g:DoxygenToolkit_cinoptions
 
 	" Test authorName variable
 	if !exists("g:DoxygenToolkit_authorName")
@@ -486,7 +497,7 @@ function! <SID>DoxygenAuthorFunc()
 	" Store indentation
 	let l:oldcinoptions = &cinoptions
 	" Set new indentation
-	let &cinoptions="c1C1"
+	let &cinoptions=g:DoxygenToolkit_cinoptions
 
 	" Test authorName variable
 	if !exists("g:DoxygenToolkit_authorName")
@@ -555,7 +566,7 @@ function! <SID>DoxygenBlockFunc()
 	" Store indentation
 	let l:oldcinoptions = &cinoptions
 	" Set new indentation
-	let &cinoptions="c1C1"
+	let &cinoptions=g:DoxygenToolkit_cinoptions
 
 	exec "normal o" . g:DoxygenToolkit_startCommentTag
 	exec "normal o" . g:DoxygenToolkit_interCommentTag . g:DoxygenToolkit_blockTag
