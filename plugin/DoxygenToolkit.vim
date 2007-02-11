@@ -1,8 +1,21 @@
 " DoxygenToolkit.vim
 " Brief: Usefull tools for Doxygen (comment, author, license).
-" Version: 0.1.14
-" Date: 11/04/06
+" Version: 0.1.15
+" Date: 02/11/07
 " Author: Mathias Lorente
+"
+" Note: Remove header and footer from doxygen documentation
+"   - Generated documentation with block header/footer activated (see
+"     parameters g:DoxygenToolkit_blockHeader and
+"     g:DoxygenToolkit_blockFooter) do not integrate header and footer
+"     anymore.
+"     Thanks to Justin RANDALL for this.
+"     Now comments are as following:
+"     /* --- My Header --- */             // --- My Header ---
+"     /**                                 /// @brief ...
+"      *  @brief ...                or    // --- My Footer ---
+"      */
+"     /* -- My Footer --- */
 "
 " Note: Changes to customize cinoptions
 "   - New option available for cinoptions : g:DoxygenToolkit_cinoptions
@@ -214,19 +227,25 @@ if !exists("g:DoxygenToolkit_cinoptions")
 endif
 if !exists("g:DoxygenToolkit_startCommentTag ")
 	let g:DoxygenToolkit_startCommentTag = "/** "
+	let g:DoxygenToolkit_startCommentBlock = "/* "
 endif
 if !exists("g:DoxygenToolkit_interCommentTag ")
 	let g:DoxygenToolkit_interCommentTag = "* "
 endif
 if !exists("g:DoxygenToolkit_endCommentTag ")
 	let g:DoxygenToolkit_endCommentTag = "*/"
+	let g:DoxygenToolkit_endCommentBlock = " */"
 endif
 if exists("g:DoxygenToolkit_commentType")
 	if ( g:DoxygenToolkit_commentType == "C++" )
 		let g:DoxygenToolkit_startCommentTag = "/// "
 		let g:DoxygenToolkit_interCommentTag = "/// "
 		let g:DoxygenToolkit_endCommentTag = ""
+		let g:DoxygenToolkit_startCommentBlock = "// "
+		let g:DoxygenToolkit_endCommentBlock = ""
 	endif
+else
+	let g:DoxygenToolkit_commentType = "C"
 endif
 
 if !exists("g:DoxygenToolkit_ignoreForReturn")
@@ -307,13 +326,23 @@ function! <SID>DoxygenCommentFunc()
 
 	" Start creating doxygen pattern
 	exec "normal `d" 
-	exec "normal O" . g:DoxygenToolkit_startCommentTag . g:DoxygenToolkit_blockHeader
-	exec "normal o" . g:DoxygenToolkit_interCommentTag . g:DoxygenToolkit_briefTag_pre
-	mark d
-	if ( g:DoxygenToolkit_endCommentTag == "" )
-		exec "normal o" . g:DoxygenToolkit_startCommentTag . g:DoxygenToolkit_blockFooter
+	if ( g:DoxygenToolkit_blockHeader != "" )
+		exec "normal O" . g:DoxygenToolkit_startCommentBlock . g:DoxygenToolkit_blockHeader . g:DoxygenToolkit_endCommentBlock
+		exec "normal o" . g:DoxygenToolkit_startCommentTag . g:DoxygenToolkit_briefTag_pre
 	else
-		exec "normal o" . g:DoxygenToolkit_blockFooter . g:DoxygenToolkit_endCommentTag
+		if ( g:DoxygenToolkit_commentType == "C++" )
+			exec "normal O" . g:DoxygenToolkit_startCommentTag . g:DoxygenToolkit_briefTag_pre
+		else
+			exec "normal O" . g:DoxygenToolkit_startCommentTag
+			exec "normal o" . g:DoxygenToolkit_interCommentTag . g:DoxygenToolkit_briefTag_pre
+		endif
+	endif
+	mark d
+	if ( g:DoxygenToolkit_endCommentTag != "" )
+		exec "normal o" . g:DoxygenToolkit_endCommentTag
+	endif
+	if ( g:DoxygenToolkit_blockFooter != "" )
+		exec "normal o" . g:DoxygenToolkit_startCommentBlock . g:DoxygenToolkit_blockFooter . g:DoxygenToolkit_endCommentBlock
 	endif
 	exec "normal `d"
 
