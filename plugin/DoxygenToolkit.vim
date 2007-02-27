@@ -1,8 +1,11 @@
 " DoxygenToolkit.vim
 " Brief: Usefull tools for Doxygen (comment, author, license).
-" Version: 0.1.15
-" Date: 02/11/07
+" Version: 0.1.16
+" Date: 02/27/07
 " Author: Mathias Lorente
+"
+" Note: Bug correction : function that returns null pointer are correctly
+"     documented (Thanks to Ronald WAHL for his report and patch).
 "
 " Note: Remove header and footer from doxygen documentation
 "   - Generated documentation with block header/footer activated (see
@@ -383,7 +386,7 @@ function! <SID>DoxygenCommentFunc()
 		let l:endP = match( l:lineBuffer, l:argBegin )
 		while ( l:currentP < l:endP )
 			let l:beginP = l:currentP + 1
-			let l:currentP = match( l:lineBuffer, ' ', l:beginP )
+			let l:currentP = match( l:lineBuffer, '[&*[:space:]]', l:beginP )
 			if ( l:currentP == -1 )
 				let l:currentP = l:endP
 			endif
@@ -397,19 +400,27 @@ function! <SID>DoxygenCommentFunc()
 
 	" Add return tag if function do not return void
 	let l:beginArgPos = match(l:lineBuffer, l:argBegin)
-	let l:beginP = 0	" Name can start at the beginning of l:lineBuffer, it is usually between spaces or space and parenthesis
+	let l:beginP = 0	" Name can start at the beginning of l:lineBuffer, it is usually between whitespaces or space and parenthesis
 	let l:endP = 0
 	let l:returnFlag = -1	" At least one name (function name) do not correspond to the list of ignored values.
 	while ( l:endP != l:beginArgPos )
-		let l:endP = match(l:lineBuffer, ' ', l:beginP )
+		" look for  * or & (pointer or reference)
+		let l:endP = match(l:lineBuffer, '[&*]', l:beginP )
 		if ( l:endP > l:beginArgPos || l:endP == -1 )
-			let l:endP = l:beginArgPos
+			" not found --> look for whitespace
+			let l:endP = match(l:lineBuffer, '\s', l:beginP )
+			if ( l:endP > l:beginArgPos || l:endP == -1 )
+				let l:endP = l:beginArgPos
+			endif
+		else
+			" found * or & -- so we have a return value
+			let l:returnFlag = l:returnFlag + 1
 		endif
 		let l:name = strpart(l:lineBuffer, l:beginP, l:endP - l:beginP)
 		let l:beginP = l:endP + 1
 		" Hack, because of '~' is not correctly interprated by match... if you
 		" have a solution, send me it !
-		if ( l:name[0] != '~' && match(g:DoxygenToolkit_ignoreForReturn, l:name) == -1 )
+		if ( l:name[0] != '~' && matchstr(g:DoxygenToolkit_ignoreForReturn, "\\<" . l:name . "\\>") != l:name )
 			let l:returnFlag = l:returnFlag + 1
 		endif
 	endwhile
