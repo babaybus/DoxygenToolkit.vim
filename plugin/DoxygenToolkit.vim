@@ -1,8 +1,11 @@
 " DoxygenToolkit.vim
 " Brief: Usefull tools for Doxygen (comment, author, license).
-" Version: 0.1.16
-" Date: 02/27/07
+" Version: 0.1.17
+" Date: 04/15²07
 " Author: Mathias Lorente
+"
+" Note: Number of lines scanned is now configurable. Default value is still 10
+"     lines. (Thanks to Spencer Collyer for this improvement).
 "
 " Note: Bug correction : function that returns null pointer are correctly
 "     documented (Thanks to Ronald WAHL for his report and patch).
@@ -257,6 +260,11 @@ else
 	let g:DoxygenToolkit_ignoreForReturn = g:DoxygenToolkit_ignoreForReturn . " inline static virtual void"
 endif
 
+" Maximum number of lines to check for function parameters
+if !exists("g:DoxygenToolkit_maxFunctionProtoLines")
+	let g:DoxygenToolkit_maxFunctionProtoLines = 10
+endif
+
 " Add name of function after pre brief tag if you want
 if !exists("g:DoxygenToolkit_briefTag_funcName")
 	let g:DoxygenToolkit_briefTag_funcName = "no"
@@ -311,14 +319,14 @@ function! <SID>DoxygenCommentFunc()
 		endif
 		" Get the entire function
 		let l:count = 0
-		while ( l:lineBuffer !~ l:argEnd && l:count < 10 )
+		while ( l:lineBuffer !~ l:argEnd && l:count < g:DoxygenToolkit_maxFunctionProtoLines )
 			exec "normal j"
 			let l:line = getline(line("."))
 			let l:lineBuffer = l:lineBuffer . ' ' . l:line
 			let l:count = l:count + 1
 		endwhile
 		" Function definition seem to be too long...
-		if ( l:count == 10 )
+		if ( l:count == g:DoxygenToolkit_maxFunctionProtoLines )
 			" Restore standard comment expension
 			let &comments = l:oldComments 
 			" Restore indentation
