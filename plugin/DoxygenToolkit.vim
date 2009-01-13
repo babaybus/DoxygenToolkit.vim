@@ -1,8 +1,25 @@
 " DoxygenToolkit.vim
 " Brief: Usefull tools for Doxygen (comment, author, license).
-" Version: 0.1.17
-" Date: 04/15²07
+" Version: 0.2.0
+" Date: 01/13/08
 " Author: Mathias Lorente
+"
+" TODO: add automatically (option controlled) in/in out flags to function
+"       parameters
+"
+" Note: The main function has been rewritten (I hope it is cleaner).
+"   - There is now support for function pointer as parameter (C/C++).
+"   - You can configure the script to get one line documentation (for
+"     attribute instance for example, you need to set
+"     g:DoxygenToolkit_compactOneLineDoc to "yes").
+"
+"   - NEW: Support Python scripts:
+"      - Function/method are not scanned, so by default they are considered
+"        as if they always return something (modify this behavior by defining
+"        g:DoxygenToolkit_python_autoFunctionReturn to "no")
+"      - self parameter is automatically ignored when scanning function
+"        parameters (you can change this behavior by defining
+"        g:DoxygenToolkit_python_autoRemoveSelfParam to "no")
 "
 " Note: Number of lines scanned is now configurable. Default value is still 10
 "     lines. (Thanks to Spencer Collyer for this improvement).
@@ -61,18 +78,18 @@
 "   - Fixed errors with function with no indentation.
 "
 "
-" Actually five purposes have been defined :
+" Currently five purposes have been defined :
 "
 " Generates a doxygen license comment.  The tag text is configurable.
 "
 " Generates a doxygen author skeleton.  The tag text is configurable.
 "
-" Generates a doxygen comment skeleton for a C, C++, or Java function or class,
+" Generates a doxygen comment skeleton for a C, C++ or Python function or class,
 " including @brief, @param (for each named argument), and @return.  The tag
 " text as well as a comment block header and footer are configurable.
 " (Consequently, you can have \brief, etc. if you wish, with little effort.)
 " 
-" Ignore code fragment placed in a block defined by #ifdef ... #endif.  The
+" Ignore code fragment placed in a block defined by #ifdef ... #endif (C/C++).  The
 " block name must be given to the function.  All of the corresponding blocks
 " in all the file will be treated and placed in a new block DOX_SKIP_BLOCK (or
 " any other name that you have configured).  Then you have to update
@@ -83,8 +100,8 @@
 " configurable.
 "
 " Use:
-" - Type of comments ( /// or /** ... */ ) :
-"   In vim, default comments are : /** ... */. But if you prefer to use ///
+" - Type of comments (C/C++: /// or /** ... */, Python: ## and # ) :
+"   In vim, default C++ comments are : /** ... */. But if you prefer to use ///
 "   Doxygen comments just add 'let g:DoxygenToolkit_commentType = "C++"'
 "   (without quotes) in your .vimrc file
 "
@@ -121,7 +138,9 @@
 " - Not able to update a comment block after it's been written.
 " - Blocks delimiters (header and footer) are only included for function
 "   comment.
-" - Assumes that cindent is used. 
+" - Assumes that cindent is used.
+" - Comments in function parameters (such as void foo(int bar /* ... */, baz))
+"   are not yet supported.
 "
 "
 " Example:
@@ -138,15 +157,15 @@
 " generate
 " 
 " /**
-" * @brief
-" *
-" * @param mychar
-" * @param myint
-" * @param myarray
-" * @param mask
-" *
-" * @return
-" */
+"  * @brief
+"  *
+"  * @param mychar
+"  * @param myint
+"  * @param myarray
+"  * @param mask
+"  *
+"  * @return
+"  */
 "
 "
 " To customize the output of the script, see the g:DoxygenToolkit_*
@@ -160,15 +179,15 @@
 " let g:DoxygenToolkit_blockHeader="--------------------------------------------------------------------------"
 " let g:DoxygenToolkit_blockFooter="----------------------------------------------------------------------------"
 " let g:DoxygenToolkit_authorName="Mathias Lorente"
-" let g:DoxygenToolkit_licenseTag="My own license\<enter>"   <-- Do not forget
-" ending "\<enter>"
+" let g:DoxygenToolkit_licenseTag="My own license"   <-- Does not end with
+" "\<enter>"
 
 
 " Verify if already loaded
-if exists("loaded_DoxygenToolkit")
-	"echo 'DoxygenToolkit Already Loaded.'
-	finish
-endif
+"if exists("loaded_DoxygenToolkit")
+"	echo 'DoxygenToolkit Already Loaded.'
+"	finish
+"endif
 let loaded_DoxygenToolkit = 1
 "echo 'Loading DoxygenToolkit...'
 let s:licenseTag = "Copyright (C) \<enter>"
@@ -195,7 +214,7 @@ if !exists("g:DoxygenToolkit_paramTag_pre")
 	let g:DoxygenToolkit_paramTag_pre = "@param "
 endif
 if !exists("g:DoxygenToolkit_paramTag_post")
-	let g:DoxygenToolkit_paramTag_post = " "
+	let g:DoxygenToolkit_paramTag_post = ""
 endif
 if !exists("g:DoxygenToolkit_returnTag")
 	let g:DoxygenToolkit_returnTag = "@return "
@@ -238,9 +257,12 @@ endif
 if !exists("g:DoxygenToolkit_interCommentTag ")
 	let g:DoxygenToolkit_interCommentTag = "* "
 endif
+if !exists("g:DoxygenToolkit_interCommentBlock ")
+	let g:DoxygenToolkit_interCommentBlock = "* "
+endif
 if !exists("g:DoxygenToolkit_endCommentTag ")
 	let g:DoxygenToolkit_endCommentTag = "*/"
-	let g:DoxygenToolkit_endCommentBlock = " */"
+	let g:DoxygenToolkit_endCommentBlock = "*/"
 endif
 if exists("g:DoxygenToolkit_commentType")
 	if ( g:DoxygenToolkit_commentType == "C++" )
@@ -248,274 +270,86 @@ if exists("g:DoxygenToolkit_commentType")
 		let g:DoxygenToolkit_interCommentTag = "/// "
 		let g:DoxygenToolkit_endCommentTag = ""
 		let g:DoxygenToolkit_startCommentBlock = "// "
+		let g:DoxygenToolkit_interCommentBlock = "// "
 		let g:DoxygenToolkit_endCommentBlock = ""
+  else
+    let g:DoxygenToolkit_commentType = "C"
 	endif
 else
 	let g:DoxygenToolkit_commentType = "C"
 endif
 
-if !exists("g:DoxygenToolkit_ignoreForReturn")
-	let g:DoxygenToolkit_ignoreForReturn = "inline static virtual void"
-else
-	let g:DoxygenToolkit_ignoreForReturn = g:DoxygenToolkit_ignoreForReturn . " inline static virtual void"
+" Compact documentation
+" /**
+"  * \brief foo      --->    /** \brief foo */
+"  */
+if !exists("g:DoxygenToolkit_compactOneLineDoc")
+  let g:DoxygenToolkit_compactOneLineDoc = "no"
 endif
+" /**
+"  * \brief foo             /**
+"  *                         * \brief foo
+"  * \param bar      --->    * \param bar
+"  *                         * \return
+"  * \return                 */
+"  */
+if !exists("g:DoxygenToolkit_compactDoc")
+  let g:DoxygenToolkit_compactDoc = "no"
+endif
+
+" Necessary '\<' and '\>' will be added to each item of the list.
+let s:ignoreForReturn = ['template', 'explicit', 'inline', 'static', 'virtual', 'void\([[:blank:]]*\*\)\@!', 'const', 'volatile']
+if !exists("g:DoxygenToolkit_ignoreForReturn")
+	let g:DoxygenToolkit_ignoreForReturn = s:ignoreForReturn[:]
+else
+	let g:DoxygenToolkit_ignoreForReturn += s:ignoreForReturn
+endif
+unlet s:ignoreForReturn
 
 " Maximum number of lines to check for function parameters
 if !exists("g:DoxygenToolkit_maxFunctionProtoLines")
 	let g:DoxygenToolkit_maxFunctionProtoLines = 10
 endif
 
-" Add name of function after pre brief tag if you want
+" Add name of function/class/struct... after pre brief tag if you want
+if !exists("g:DoxygenToolkit_briefTag_className")
+	let g:DoxygenToolkit_briefTag_className = "no"
+endif
+if !exists("g:DoxygenToolkit_briefTag_structName")
+	let g:DoxygenToolkit_briefTag_structName = "no"
+endif
+if !exists("g:DoxygenToolkit_briefTag_enumName")
+	let g:DoxygenToolkit_briefTag_enumName = "no"
+endif
+if !exists("g:DoxygenToolkit_briefTag_namespaceName")
+	let g:DoxygenToolkit_briefTag_namespaceName = "no"
+endif
 if !exists("g:DoxygenToolkit_briefTag_funcName")
 	let g:DoxygenToolkit_briefTag_funcName = "no"
 endif
 
+" Keep empty line (if any) between comment and function/class/...
+if !exists("g:DoxygenToolkit_keepEmptyLineAfterComment")
+  let g:DoxygenToolkit_keepEmptyLineAfterComment = "no"
+endif
 
-""""""""""""""""""""""""""
-" Doxygen comment function 
-""""""""""""""""""""""""""
-function! <SID>DoxygenCommentFunc()
-	" Store indentation
-	let l:oldcinoptions = &cinoptions
-	" Set new indentation
-	let &cinoptions=g:DoxygenToolkit_cinoptions
-	
-	let l:argBegin = "\("
-	let l:argEnd = "\)"
-	let l:argSep = ','
-	let l:sep = "\ "
-	let l:voidStr = "void"
-
-	let l:classDef = 0
-
-	" Save standard comment expension
-	let l:oldComments = &comments
-	let &comments = ""
-
-	" Store function in a buffer
-	let l:lineBuffer = getline(line("."))
-	mark d
-	let l:count=1
-	" Return of function can be defined on other line than the one of the 
-	" function.
-	while ( l:lineBuffer !~ l:argBegin && l:count < 4 )
-		" This is probbly a class (or something else definition)
-		if ( l:lineBuffer =~ "{" || l:lineBuffer =~ ";" )
-			let l:classDef = 1
-			break
-		endif
-		exec "normal j"
-		let l:line = getline(line("."))
-		let l:lineBuffer = l:lineBuffer . ' ' . l:line
-		let l:count = l:count + 1
-	endwhile
-	if ( l:classDef == 0 )
-		if ( l:count == 4 )
-			" Restore standard comment expension
-			let &comments = l:oldComments 
-			" Restore indentation
-			let &cinoptions = l:oldcinoptions
-			return
-		endif
-		" Get the entire function
-		let l:count = 0
-		while ( l:lineBuffer !~ l:argEnd && l:count < g:DoxygenToolkit_maxFunctionProtoLines )
-			exec "normal j"
-			let l:line = getline(line("."))
-			let l:lineBuffer = l:lineBuffer . ' ' . l:line
-			let l:count = l:count + 1
-		endwhile
-		" Function definition seem to be too long...
-		if ( l:count == g:DoxygenToolkit_maxFunctionProtoLines )
-			" Restore standard comment expension
-			let &comments = l:oldComments 
-			" Restore indentation
-			let &cinoptions = l:oldcinoptions
-			return
-		endif
-	endif
-
-	" Start creating doxygen pattern
-	exec "normal `d" 
-	if ( g:DoxygenToolkit_blockHeader != "" )
-		exec "normal O" . g:DoxygenToolkit_startCommentBlock . g:DoxygenToolkit_blockHeader . g:DoxygenToolkit_endCommentBlock
-		exec "normal o" . g:DoxygenToolkit_startCommentTag . g:DoxygenToolkit_briefTag_pre
-	else
-		if ( g:DoxygenToolkit_commentType == "C++" )
-			exec "normal O" . g:DoxygenToolkit_startCommentTag . g:DoxygenToolkit_briefTag_pre
-		else
-			exec "normal O" . g:DoxygenToolkit_startCommentTag
-			exec "normal o" . g:DoxygenToolkit_interCommentTag . g:DoxygenToolkit_briefTag_pre
-		endif
-	endif
-	mark d
-	if ( g:DoxygenToolkit_endCommentTag != "" )
-		exec "normal o" . g:DoxygenToolkit_endCommentTag
-	endif
-	if ( g:DoxygenToolkit_blockFooter != "" )
-		exec "normal o" . g:DoxygenToolkit_startCommentBlock . g:DoxygenToolkit_blockFooter . g:DoxygenToolkit_endCommentBlock
-	endif
-	exec "normal `d"
-
-	" Class definition, let's start with brief tag
-	if ( l:classDef == 1 )
-		" Restore standard comment expension
-		let &comments = l:oldComments 
-		" Restore indentation
-		let &cinoptions = l:oldcinoptions
-
-		startinsert!
-		return
-	endif
-
-	" Replace tabs by space
-	let l:lineBuffer = substitute(l:lineBuffer, "\t", "\ ", "g")
-
-	" Delete recursively all double spaces
-	while ( match(l:lineBuffer, "\ \ ") != -1 )
-		let l:lineBuffer = substitute(l:lineBuffer, "\ \ ", "\ ", "g")
-	endwhile
-
-	" Delete space just after and just before parenthesis
-	" Remove space between function name and opening paenthesis
-	let l:lineBuffer = substitute(l:lineBuffer, "(\ ", "(", "")
-	let l:lineBuffer = substitute(l:lineBuffer, "\ )", ")", "")
-	let l:lineBuffer = substitute(l:lineBuffer, "\ (", "(", "")
-
-	" Delete first space (if any)
-	if ( match(l:lineBuffer, ' ') == 0 )
-		let l:lineBuffer = strpart(l:lineBuffer, 1)
-	endif
-
-	" Add function name if requiered
-	if ( g:DoxygenToolkit_briefTag_funcName =~ "yes" )
-		let l:beginP = 0
-		let l:currentP = -1
-		let l:endP = match( l:lineBuffer, l:argBegin )
-		while ( l:currentP < l:endP )
-			let l:beginP = l:currentP + 1
-			let l:currentP = match( l:lineBuffer, '[&*[:space:]]', l:beginP )
-			if ( l:currentP == -1 )
-				let l:currentP = l:endP
-			endif
-		endwhile
-		let l:name = strpart( l:lineBuffer, l:beginP, l:endP - l:beginP )
-		exec "normal A" . l:name
-	endif
-
-	" Now can add brief post tag
-	exec "normal A" . g:DoxygenToolkit_briefTag_post
-
-	" Add return tag if function do not return void
-	let l:beginArgPos = match(l:lineBuffer, l:argBegin)
-	let l:beginP = 0	" Name can start at the beginning of l:lineBuffer, it is usually between whitespaces or space and parenthesis
-	let l:endP = 0
-	let l:returnFlag = -1	" At least one name (function name) do not correspond to the list of ignored values.
-	while ( l:endP != l:beginArgPos )
-		" look for  * or & (pointer or reference)
-		let l:endP = match(l:lineBuffer, '[&*]', l:beginP )
-		if ( l:endP > l:beginArgPos || l:endP == -1 )
-			" not found --> look for whitespace
-			let l:endP = match(l:lineBuffer, '\s', l:beginP )
-			if ( l:endP > l:beginArgPos || l:endP == -1 )
-				let l:endP = l:beginArgPos
-			endif
-		else
-			" found * or & -- so we have a return value
-			let l:returnFlag = l:returnFlag + 1
-		endif
-		let l:name = strpart(l:lineBuffer, l:beginP, l:endP - l:beginP)
-		let l:beginP = l:endP + 1
-		" Hack, because of '~' is not correctly interprated by match... if you
-		" have a solution, send me it !
-		if ( l:name[0] != '~' && matchstr(g:DoxygenToolkit_ignoreForReturn, "\\<" . l:name . "\\>") != l:name )
-			let l:returnFlag = l:returnFlag + 1
-		endif
-	endwhile
-	if ( l:returnFlag >= 1 )	
-		exec "normal o" . g:DoxygenToolkit_interCommentTag
-		exec "normal o" . g:DoxygenToolkit_interCommentTag . g:DoxygenToolkit_returnTag
-	endif
-
-	" Looking for argument name in line buffer
-	exec "normal `d"
-	let l:argList = 0    " ==0 -> no argument, !=0 -> at least one arg
-
-	let l:beginP = 0
-	let l:endP = 0
-	let l:prevBeginP = 0
-
-	" Arguments start after opening parenthesis
-	let l:beginP = match(l:lineBuffer, l:argBegin, l:beginP) + 1
-	let l:prevBeginP = l:beginP
-	let l:endP = l:beginP
-
-	" Test if there is something into parenthesis
-	let l:beginP = l:beginP
-	if ( l:beginP == match(l:lineBuffer, l:argEnd, l:beginP) )
-		" Restore standard comment expension
-		let &comments = l:oldComments 
-		" Restore indentation
-		let &cinoptions = l:oldcinoptions
-
-		startinsert!
-		return
-	endif
-
-	" Enter into main loop
-	while ( l:beginP > 0 && l:endP > 0 )
-
-		" Looking for arg separator
-		let l:endP1 = match(l:lineBuffer, l:argSep, l:beginP)
-		let l:endP = match(l:lineBuffer, l:argEnd, l:beginP)
-		if ( l:endP1 != -1 && l:endP1 < l:endP )
-			let l:endP = l:endP1
-		endif
-		let l:endP = l:endP - 1
-
-		if ( l:endP > 0 )
-			let l:strBuf = ReturnArgName(l:lineBuffer, l:beginP, l:endP)
-			" void parameter
-			if ( l:strBuf == l:voidStr )
-				" Restore standard comment expension
-				let &comments = l:oldComments 
-				" Restore indentation
-				let &cinoptions = l:oldcinoptions
-				
-				startinsert!
-				break
-			endif
-			exec "normal o" . g:DoxygenToolkit_interCommentTag . g:DoxygenToolkit_paramTag_pre . l:strBuf . g:DoxygenToolkit_paramTag_post
-			let l:beginP = l:endP + 2
-			let l:argList = 1
-		endif
-	endwhile
-
-	" Add blank line if necessary
-	if ( l:argList != 0 )
-		exec "normal `do" . g:DoxygenToolkit_interCommentTag
-	endif
-
-	" move the cursor to the correct position (after brief tag)
-	exec "normal `d"
-	 
-	" Restore standard comment expension
-	let &comments = l:oldComments 
-	" Restore indentation
-	let &cinoptions = l:oldcinoptions
-
-	startinsert!
-endfunction
+" PYTHON specific
+"""""""""""""""""
+" Remove automatically self parameter from function to avoid its documantation
+if !exists("g:DoxygenToolkit_python_autoRemoveSelfParam")
+  let g:DoxygenToolkit_python_autoRemoveSelfParam = "yes"
+endif
+" Consider functions as if they always return something (default: yes)
+if !exists("g:DoxygenToolkit_python_autoFunctionReturn")
+  let g:DoxygenToolkit_python_autoFunctionReturn = "yes"
+endif
 
 
 """"""""""""""""""""""""""
 " Doxygen license comment
 """"""""""""""""""""""""""
 function! <SID>DoxygenLicenseFunc()
-	" Store indentation
-	let l:oldcinoptions = &cinoptions
-	" Set new indentation
-	let &cinoptions=g:DoxygenToolkit_cinoptions
+  call s:InitializeParameters()
 
 	" Test authorName variable
 	if !exists("g:DoxygenToolkit_authorName")
@@ -523,15 +357,16 @@ function! <SID>DoxygenLicenseFunc()
 	endif
 	mark d
 	let l:date = strftime("%Y")
-	exec "normal O/*\<Enter>" . g:DoxygenToolkit_licenseTag
-	exec "normal ^c$*/"
-	if ( g:DoxygenToolkit_licenseTag == s:licenseTag )
-		exec "normal %jA" . l:date . " - " . g:DoxygenToolkit_authorName
+	exec "normal O".s:startCommentBlock.substitute( g:DoxygenToolkit_licenseTag, "\<enter>", "\<enter>".s:interCommentBlock, "g" )
+  if( s:endCommentBlock != "" )
+    exec "normal o".s:endCommentBlock
+  endif
+	if( g:DoxygenToolkit_licenseTag == s:licenseTag )
+		exec "normal %jA".l:date." - ".g:DoxygenToolkit_authorName
 	endif
 	exec "normal `d"
 
-	" Restore indentation
-	let &cinoptions = l:oldcinoptions
+	call s:RestoreParameters()
 endfunction
 
 
@@ -539,13 +374,7 @@ endfunction
 " Doxygen author comment
 """"""""""""""""""""""""""
 function! <SID>DoxygenAuthorFunc()
-	" Save standard comment expension
-	let l:oldComments = &comments
-	let &comments = ""
-	" Store indentation
-	let l:oldcinoptions = &cinoptions
-	" Set new indentation
-	let &cinoptions=g:DoxygenToolkit_cinoptions
+  call s:InitializeParameters()
 
 	" Test authorName variable
 	if !exists("g:DoxygenToolkit_authorName")
@@ -556,32 +385,28 @@ function! <SID>DoxygenAuthorFunc()
 	let l:fileName = expand('%:t')
 
 	" Begin to write skeleton
-	exec "normal O" . g:DoxygenToolkit_startCommentTag
-	exec "normal o" . g:DoxygenToolkit_interCommentTag . g:DoxygenToolkit_fileTag . l:fileName
-	exec "normal o" . g:DoxygenToolkit_interCommentTag . g:DoxygenToolkit_briefTag_pre
+  let l:insertionMode = s:StartDocumentationBlock()
+	exec "normal ".l:insertionMode.s:interCommentTag.g:DoxygenToolkit_fileTag.l:fileName
+	exec "normal o".s:interCommentTag.g:DoxygenToolkit_briefTag_pre
 	mark d
-	exec "normal o" . g:DoxygenToolkit_interCommentTag . g:DoxygenToolkit_authorTag . g:DoxygenToolkit_authorName
+	exec "normal o".s:interCommentTag.g:DoxygenToolkit_authorTag.g:DoxygenToolkit_authorName
 	let l:date = strftime("%Y-%m-%d")
-	exec "normal o" . g:DoxygenToolkit_interCommentTag . g:DoxygenToolkit_dateTag . l:date
-	if ( g:DoxygenToolkit_endCommentTag == "" )
-		exec "normal o" . g:DoxygenToolkit_interCommentTag
-	else
-		exec "normal o" . g:DoxygenToolkit_endCommentTag
+	exec "normal o".s:interCommentTag.g:DoxygenToolkit_dateTag.l:date
+	if ( g:DoxygenToolkit_endCommentTag != "" )
+		exec "normal o".s:endCommentTag
 	endif
 
-	" Replace the cursor to the rigth position
+	" Move the cursor to the rigth position
 	exec "normal `d"
 
-	" Restore standard comment expension
-	let &comments = l:oldComments
-	" Restore indentation
-	let &cinoptions = l:oldcinoptions
+  call s:RestoreParameters()
 	startinsert!
 endfunction
 
 
 """"""""""""""""""""""""""
 " Doxygen undocument function
+" C/C++ only!
 """"""""""""""""""""""""""
 function! <SID>DoxygenUndocumentFunc(blockTag)
 	let l:search = "#ifdef " . a:blockTag
@@ -608,108 +433,494 @@ endfunction
 " DoxygenBlockFunc
 """"""""""""""""""""""""""
 function! <SID>DoxygenBlockFunc()
-	" Save standard comment expension
-	let l:oldComments = &comments
-	let &comments = ""
-	" Store indentation
-	let l:oldcinoptions = &cinoptions
-	" Set new indentation
-	let &cinoptions=g:DoxygenToolkit_cinoptions
+  call s:InitializeParameters()
 
-	exec "normal o" . g:DoxygenToolkit_startCommentTag
-	exec "normal o" . g:DoxygenToolkit_interCommentTag . g:DoxygenToolkit_blockTag
+  let l:insertionMode = s:StartDocumentationBlock()
+	exec "normal ".l:insertionMode.s:interCommentTag.g:DoxygenToolkit_blockTag
 	mark d
-	exec "normal o" . g:DoxygenToolkit_interCommentTag . "@{ " . g:DoxygenToolkit_endCommentTag
-	exec "normal o" . g:DoxygenToolkit_startCommentTag . " @} " . g:DoxygenToolkit_endCommentTag
+	exec "normal o".s:interCommentTag."@{ ".s:endCommentTag
+	exec "normal o".s:startCommentTag." @} ".s:endCommentTag
 	exec "normal `d"
-	
-	" Restore standard comment expension
-	let &comments = l:oldComments
-	" Restore indentation
-	let &cinoptions = l:oldcinoptions
+
+	call s:RestoreParameters()
 	startinsert!
 endfunction
 
 
-"function! AppendText(text)
-"	call append(line("."), a:text)
-"	exec "normal j" 
-"endfunction
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+" Main comment function for class, attribute, function...
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+function! <SID>DoxygenCommentFunc()
 
-"
-" Returns the indentations level for a line
-" MakeIndent([lineNum])
-"
-"function! MakeIndent(...)
-"	let line = getline(".")
-"	if a:0 == 1 
-"		let line = getline(a:1)
-"	endif
-"	return matchstr(line, '^\s*')
-"endfunction
+  " Initialize default templates.
+  " Assure compatibility with Python for classes (cf. endDocPattern).
+  let l:emptyLinePattern = '^[[:blank:]]*$'
+  let l:someNamePattern  = '[_[:alpha:]][_[:alnum:]]*'
 
-""""""""""""""""""""""""""
-" Extract the name of argument
-""""""""""""""""""""""""""
-function ReturnArgName(argBuf, beginP, endP)
+  if( s:CheckFileType() == "cpp" )
+    let l:someNameWithNamespacePattern  = l:someNamePattern.'\%(::'.l:someNamePattern.'\)*'
+    let l:endDocPattern    = ';\|{\|\%([^:]\zs:\ze\%([^:]\|$\)\)'
+    let l:commentPattern   = '\%(/*\)\|\%(//\)\'
+    let l:templateParameterPattern = "<[^<>]*>"
 
-	" Name of argument is at the end of argBuf if no default (id arg = 0)
-	let l:equalP = match(a:argBuf, "=", a:beginP)
-	if ( l:equalP == -1 || l:equalP > a:endP )
-		" Look for arg name begining
-		let l:beginP = a:beginP 
-		let l:prevBeginP = l:beginP
-		while ( l:beginP < a:endP && l:beginP != -1 )
-			let l:prevBeginP = l:beginP
-			let l:beginP = match(a:argBuf, " ", l:beginP + 1)
-		endwhile
-		let l:beginP = l:prevBeginP
-		let l:endP = a:endP
-	else
-		" Look for arg name begining
-		let l:addPos = 0
-		let l:beginP = a:beginP
-		let l:prevBeginP = l:beginP
-		let l:doublePrevBeginP = l:prevBeginP
-		while ( l:beginP < l:equalP && l:beginP != -1 )
-			let l:doublePrevBeginP = l:prevBeginP
-			let l:prevBeginP = l:beginP + l:addPos
-			let l:beginP = match(a:argBuf, " ", l:beginP + 1)
-			let l:addPos = 1
-		endwhile
+    let l:classPattern     = '\<class\>[[:blank:]]\+\zs'.l:someNameWithNamespacePattern.'\ze.*\%('.l:endDocPattern.'\)'
+    let l:structPattern    = '\<struct\>[[:blank:]]\+\zs'.l:someNameWithNamespacePattern.'\ze.*\%('.l:endDocPattern.'\)'
+    let l:enumPattern      = '\<enum\>\%(\%([[:blank:]]\+\zs'.l:someNamePattern.'\ze[[:blank:]]*\)\|\%(\zs\ze[[:blank:]]*\)\)\%('.l:endDocPattern.'\)'
+    let l:namespacePattern = '\<namespace\>[[:blank:]]\+\zs'.l:someNamePattern.'\ze[[:blank:]]*\%('.l:endDocPattern.'\)'
 
-		" Space just before equal
-		if ( l:prevBeginP == l:equalP )
-			let l:beginP = l:doublePrevBeginP
-			let l:endP = l:prevBeginP - 2
-		else
-			" No space just before so...
-			let l:beginP = l:prevBeginP
-			let l:endP = l:equalP - 1
-		endif
+    let l:types = { "class": l:classPattern, "struct": l:structPattern, "enum": l:enumPattern, "namespace": l:namespacePattern }
+  else
+    let l:commentPattern   = '#\|^[[:blank:]]*"""'
+
+    let l:classPattern     = '\<class\>[[:blank:]]\+\zs'.l:someNamePattern.'\ze.*:'
+    let l:functionPattern  = '\<def\>[[:blank:]]\+\zs'.l:someNamePattern.'\ze.*:'
+
+    let l:endDocPattern    = '\%(\<class\>\|\<def\>[^:]*\)\@<!$'
+
+    let l:types = { "class": l:classPattern, "function": l:functionPattern }
+  endif
+
+  let l:lineBuffer       = getline( line( "." ) )
+  let l:count            = 1
+  let l:endDocFound      = 0
+
+  let l:doc = { "type": "", "name": "None", "params": [], "returns": "" }
+
+  " Mark current line for future use
+  mark d
+
+  " Look for function/method/... to document
+  " We look only on the first three lines!
+  while( match( l:lineBuffer, l:emptyLinePattern ) != -1 && l:count < 4 )
+    exec "normal j"
+    let l:lineBuffer = l:lineBuffer.' '.getline( line( "." ) )
+    let l:count = l:count + 1
+  endwhile
+  " Error message when the buffer is still empty.
+  if( match( l:lineBuffer, l:emptyLinePattern ) != -1 )
+    call s:WarnMsg( "Nothing to document here!" )
+    exec "normal `d" 
+    return
+  endif
+
+  " Remove unwanted lines (ie: jump to the first significant line)
+  if( g:DoxygenToolkit_keepEmptyLineAfterComment == "no" )
+    " This erase previous mark
+    mark d
+  endif
+
+  " Look for the end of the function/class/... to document
+  " TODO does not work when function/class/... is commented out!
+  let l:count = 0
+  while( l:endDocFound == 0 && l:count < g:DoxygenToolkit_maxFunctionProtoLines )
+    let l:lineBuffer = s:RemoveComments( l:lineBuffer )
+    " Valid only for cpp. For Python it must be 'class ...:' or 'def ...:' or
+    " '... EOL'.
+    if( match( l:lineBuffer, l:endDocPattern ) != -1 )
+      let l:endDocFound = 1
+      continue
+    endif
+    exec "normal j"
+    let l:lineBuffer = l:lineBuffer.' '.getline( line( "." ))
+    let l:count = l:count + 1
+  endwhile
+  " Error message when the end of the function(/...) has not been found
+  if( l:endDocFound == 0 )
+    if( match( l:lineBuffer, l:emptyLinePattern ) != -1 )
+      " Fall here when only comments have been found.
+      call s:WarnMsg( "Nothing to document here!" )
+      exec "normal `d" 
+      return
+    else
+      call s:WarnMsg( "Cannot reach end of function/class/... declaration!" )
+      exec "normal `d" 
+      return
+    endif
+  endif
+
+  " Trim the buffer
+  let l:lineBuffer = substitute( l:lineBuffer, "^[[:blank:]]*\|[[:blank:]]$", "", "g" )
+
+  " Remove any template parameter.
+  if( s:CheckFileType() == "cpp" )
+    while( match( l:lineBuffer, l:templateParameterPattern ) != -1 )
+      let l:lineBuffer = substitute( l:lineBuffer, l:templateParameterPattern, "", "g" )
+    endwhile
+  endif
+
+  " Look for the type
+  for key in keys( l:types )
+    "call s:WarnMsg( "[DEBUG] buffer:_".l:lineBuffer."_, test:_".l:types[key] )
+    let l:name = matchstr( l:lineBuffer, l:types[key] )
+    if( l:name != "" )
+      let l:doc.type = key
+      let l:doc.name = l:name
+
+      " Python only. Functions are detected differently for C/C++.
+      if( key == "function" )
+        "call s:WarnMsg( "HERE !!!".l:lineBuffer )
+        call s:ParseFunctionParameters( l:lineBuffer, l:doc )
+      endif
+      break
+    endif
+  endfor
+
+  if( l:doc.type == "" )
+    " Should be a function/method (cpp only) or an attribute.
+    " (cpp only) Can also be an unnamed enum/namespace... (or something else ?)
+    if( s:CheckFileType() == "cpp" )
+      if( match( l:lineBuffer, '(' ) == -1 )
+        if( match( l:lineBuffer, '\<enum\>' ) != -1 )
+          let l:doc.type = 'enum'
+        elseif( match( l:lineBuffer, '\<namespace\>' ) != -1 )
+          let l:doc.type = 'namespace'
+        else
+          " TODO here we get a class attribute of something like that.
+          "      We probably just need a \brief statement...
+          let l:doc.type = 'attribute'
+          " TODO Retrieve the name of the attribute.
+          "      Do we really need it? I'm not sure for the moment.
+        endif
+      else
+        let l:doc.type = 'function'
+        call s:ParseFunctionParameters( l:lineBuffer, l:doc )
+      endif
+ 
+    " This is an attribute for Python
+    else
+      let l:doc.type = 'attribute'
+    endif
+  endif
+
+  " Remove the function/class/... name when it is not necessary
+  if( ( key == "class" && g:DoxygenToolkit_briefTag_className != "yes" ) || ( key == "struct" && g:DoxygenToolkit_briefTag_structName != "yes" ) || ( key == "enum" && g:DoxygenToolkit_briefTag_enumName != "yes" ) || ( key == "namespace" && g:DoxygenToolkit_briefTag_namespaceName != "yes" ) || ( l:doc.type == "function" && g:DoxygenToolkit_briefTag_funcName != "yes" ) )
+    let l:doc.name = "None"
+
+  " Remove namespace from the name of the class/function...
+  elseif( s:CheckFileType() == "cpp" )
+    let l:doc.name = substitute( l:doc.name, '\%('.l:someNamePattern.'::\)', '', 'g' )
+  endif
+
+  " Below, write what we have found
+  """""""""""""""""""""""""""""""""
+
+  call s:InitializeParameters()
+  if( s:CheckFileType() == "python" && l:doc.type == "function" && g:DoxygenToolkit_python_autoFunctionReturn == "yes" )
+    let l:doc.returns = "yes"
+  endif
+
+  " Header
+	exec "normal `d" 
+	if( g:DoxygenToolkit_blockHeader != "" )
+		exec "normal O".s:startCommentBlock.g:DoxygenToolkit_blockHeader.s:endCommentBlock
+    exec "normal `d" 
+	endif
+ 
+  " Brief
+  if( g:DoxygenToolkit_compactOneLineDoc =~ "yes" && l:doc.returns != "yes" && len( l:doc.params ) == 0 )
+    let s:compactOneLineDoc = "yes"
+    exec "normal O".s:startCommentTag.g:DoxygenToolkit_briefTag_pre.g:DoxygenToolkit_briefTag_post
+  else
+    let s:compactOneLineDoc = "no"
+    let l:insertionMode = s:StartDocumentationBlock()
+    exec "normal ".l:insertionMode.s:interCommentTag.g:DoxygenToolkit_briefTag_pre.g:DoxygenToolkit_briefTag_post
+  endif
+  if( l:doc.name != "None" )
+    exec "normal A".l:doc.name." "
+  endif
+
+  " Mark the line where the cursor will be positionned.
+	mark d
+
+  " Arguments/parameters
+  if( g:DoxygenToolkit_compactDoc =~ "yes" )
+    let s:insertEmptyLine = 0
+  else
+    let s:insertEmptyLine = 1
+  endif
+  for param in l:doc.params
+    if( s:insertEmptyLine == 1 )
+      exec "normal o".s:interCommentTag
+      let s:insertEmptyLine = 0
+    endif
+    exec "normal o".s:interCommentTag.g:DoxygenToolkit_paramTag_pre.g:DoxygenToolkit_paramTag_post.param
+  endfor
+
+  " Returned value
+  if( l:doc.returns == "yes" )
+    if( g:DoxygenToolkit_compactDoc != "yes" )
+      exec "normal o".s:interCommentTag
+    endif
+    exec "normal o".s:interCommentTag.g:DoxygenToolkit_returnTag
+  endif
+
+  " End (if any) of documentation block.
+	if( s:endCommentTag != "" )
+    if( s:compactOneLineDoc =~ "yes" )
+      let s:execCommand = "A "
+    else
+      let s:execCommand = "o"
+    endif
+		exec "normal ".s:execCommand.s:endCommentTag
 	endif
 
-	" We have the begining position and the ending position...
-	let l:newBuf = strpart(a:argBuf, l:beginP, l:endP - l:beginP + 1)
-
-	" Delete leading '*' or '&'
-	if ( match(l:newBuf, "*") == 1 || match(l:newBuf, "&") == 1 )
-		let l:newBuf = strpart(l:newBuf, 2)
+  " Footer
+	if ( g:DoxygenToolkit_blockFooter != "" )
+		exec "normal o".s:startCommentBlock.g:DoxygenToolkit_blockFooter.s:endCommentBlock
 	endif
+	exec "normal `d"
 
-	" Delete tab definition ([])
-	let l:delTab = match(newBuf, "[") 
-	if ( l:delTab != -1 )
-		let l:newBuf = strpart(l:newBuf, 0, l:delTab)
-	endif
+  call s:RestoreParameters()
+  startinsert!
 
-	" Eventually clean argument name...
-	let l:newBuf = substitute(l:newBuf, " ", "", "g")
-	return l:newBuf
+  " DEBUG purpose only
+  "call s:WarnMsg( "Found a ".l:doc.type." named ".l:doc.name." (env: ".s:CheckFileType().")." )
+  "if( l:doc.type == "function" )
+  "  let l:funcReturn = "returns something."
+  "  if( l:doc.returns == "" )
+  "    let l:funcReturn = "doesn't return anything."
+  "  endif
+  "  call s:WarnMsg( " - which ".l:funcReturn )
+  "  call s:WarnMsg( " - which has following parameter(s):" )
+  "  for param in l:doc.params
+  "    call s:WarnMsg( "   - ".param )
+  "  endfor
+  "endif
 
 endfunction
 
 
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+" Write the beginning of the documentation block:
+" - C and Python format: insert '/**' and '##' respectively then a linefeed,
+" - C++ insert '///' and continue on the same line
+"
+" This function return the insertion mode which should be used for the next
+" call to 'normal'.
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+function! s:StartDocumentationBlock()
+  " For C++ documentation format we do not need first empty line
+  if( s:startCommentTag != s:interCommentTag )
+    exec "normal O".s:startCommentTag
+    let l:insertionMode = "o"
+  else
+    let l:insertionMode = "O"
+  endif
+  return l:insertionMode
+endfunction
+
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+" Remove comments from the given buffer.
+" - Remove everything after '//' or '#'.
+" - Remove everything between '/*' and '*/' or keep '/*' if '*/' is not present.
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+function! s:RemoveComments( lineBuffer )
+  " TODO: not implemented yet.
+  "       probably need to differenciate cpp from python.
+  return a:lineBuffer
+endfunction
+
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+" Retrieve file type.
+" - Default type is still 'cpp'.
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+function! s:CheckFileType()
+  if( &filetype == "python" )
+    let l:fileType       = "python"
+  else
+    let l:fileType       = "cpp"
+  endif
+  return l:fileType
+endfunction
+
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+" Parse the buffer and set the doc parameter.
+" - Functions which return pointer to function are not supported.
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+function! s:ParseFunctionParameters( lineBuffer, doc )
+"  call s:WarnMsg( 'IN__'.a:lineBuffer )
+  let l:paramPosition = stridx( a:lineBuffer, '(' )
+
+  " (cpp only) First deal with function name and returned value.
+  " Function name has alredy been retrieved for Python and we need to parse
+  " all the function definition to know whether a value is returned or not.
+  if( s:CheckFileType() == "cpp" )
+    let l:functionBuffer = strpart( a:lineBuffer, 0, l:paramPosition )
+    for ignored in g:DoxygenToolkit_ignoreForReturn
+      let l:functionBuffer = substitute( l:functionBuffer, '\<'.ignored.'\>', '', 'g' )
+    endfor
+    let l:functionReturnAndName = split( l:functionBuffer, '[[:blank:]*]' )
+    if( len( l:functionReturnAndName ) > 1 )
+      let a:doc.returns = 'yes'
+    endif
+    let a:doc.name = l:functionReturnAndName[-1]
+  endif
+
+  " Work on parameters.
+  let l:parametersBuffer = strpart( a:lineBuffer, l:paramPosition + 1 )
+  " Remove trailing closing bracket and trim.
+  let l:parametersBuffer = substitute( l:parametersBuffer, ')[[:blank:]]*\%(;\|:\)$', '', '' )
+  let l:parametersBuffer = substitute( l:parametersBuffer, '^[[:blank:]]*\|[[:blank:]]*$', '', '' )
+
+  " Remove default parameter values (if any).
+  let l:index = stridx( l:parametersBuffer, '=' )
+  let l:startIndex = l:index
+  while( l:index != -1 )
+    " Look for the next colon...
+    let l:colonIndex = stridx( l:parametersBuffer, ',', l:startIndex )
+    if( l:colonIndex == -1 )
+      let l:colonIndex = strlen( l:parametersBuffer )
+    endif
+    let l:paramBuffer = strpart( l:parametersBuffer, l:index, l:colonIndex - l:index )
+    if( s:CountBrackets( l:paramBuffer ) == 0 )
+      " Everything in [l:index, l:colonIndex[ can be removed.
+      let l:parametersBuffer = substitute( l:parametersBuffer, l:paramBuffer, '', '' )
+      let l:index = stridx( l:parametersBuffer, '=' )
+      let l:startIndex = l:index
+    else
+      " Parameter initialization contains brakets and colons...
+      let l:startIndex = l:colonIndex + 1
+    endif
+  endwhile
+
+  "call s:WarnMsg( "[DEBUG]: ".l:parametersBuffer )
+  " Now, work on each parameter.
+  let l:params = []
+  let l:index = stridx( l:parametersBuffer, ',' )
+  while( l:index != -1 )
+    let l:paramBuffer = strpart( l:parametersBuffer, 0, l:index )
+    if( s:CountBrackets( l:paramBuffer ) == 0 )
+      let l:params = add( l:params, s:ParseParameter( l:paramBuffer ) )
+      let l:parametersBuffer = strpart( l:parametersBuffer, l:index + 1 )
+      let l:index = stridx( l:parametersBuffer, ',' )
+    else
+      let l:index = stridx( l:parametersBuffer, ',', l:index + 1 )
+    endif
+  endwhile
+  if( strlen( l:parametersBuffer ) != 0 )
+    let l:params = add( l:params, s:ParseParameter( l:parametersBuffer ) )
+  endif
+
+  if( s:CheckFileType() == "cpp" )
+    call filter( l:params, 'v:val !~ "void"' )
+  else
+    if( g:DoxygenToolkit_python_autoRemoveSelfParam == "yes" )
+      call filter( l:params, 'v:val !~ "self"' )
+    endif
+  endif
+
+  for param in l:params
+    call add( a:doc.params, param )
+    "call s:WarnMsg( '[DEBUG]:OUT_'.param )
+  endfor
+endfunction
+
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+" Parse given parameter and return its name.
+" It is easy to do unless you use function's pointers...
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+function! s:ParseParameter( param )
+  let l:paramName = "Unknown"
+  let l:firstIndex = stridx( a:param, '(' )
+
+  if( l:firstIndex == -1 )
+    let l:paramName =  split( a:param, '[[:blank:]*]' )[-1]
+  else
+    if( l:firstIndex != 0 )
+      let l:startIndex = 0
+    else
+      let l:startIndex = stridx( a:param, ')' )
+      if( l:startIndex == -1 ) " Argggg...
+        let l:paramName =  a:param
+      else
+        let l:startIndex += 1
+        while( s:CountBrackets( strpart( a:param, 0, l:startIndex ) ) != 0 )
+          let l:startIndex = stridx( a:param, ')', l:startIndex + 1 ) + 1
+          if( l:startIndex == -1) " Argggg...
+            let l:paramName =  a:param
+          endif
+        endwhile
+      endif
+    endif
+
+    if( l:startIndex != -1 )
+      let l:startIndex = stridx( a:param, '(', l:startIndex ) + 1
+      let l:endIndex = stridx( a:param, ')', l:startIndex + 1 )
+      let l:param = strpart( a:param, l:startIndex, l:endIndex - l:startIndex )
+      let l:paramName =  substitute( l:param, '^[[:blank:]*]*\|[[:blank:]*]*$', '', '' )
+    else
+      " Something really wrong has happened.
+      let l:paramName =  a:param
+    endif
+  endif
+
+  return l:paramName
+endfunction
+
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+" Define start/end documentation format and backup generic parameters.
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+function! s:InitializeParameters()
+  if( s:CheckFileType() == "cpp" )
+    let s:startCommentTag   = g:DoxygenToolkit_startCommentTag
+    let s:interCommentTag   = g:DoxygenToolkit_interCommentTag
+    let s:endCommentTag     = g:DoxygenToolkit_endCommentTag
+    let s:startCommentBlock = g:DoxygenToolkit_startCommentBlock
+    let s:interCommentBlock = g:DoxygenToolkit_interCommentBlock
+    let s:endCommentBlock   = g:DoxygenToolkit_endCommentBlock
+  else
+    let s:startCommentTag   = "## "
+    let s:interCommentTag   = "# "
+    let s:endCommentTag     = ""
+    let s:startCommentBlock = "# "
+    let s:interCommentBlock = "# "
+    let s:endCommentBlock   = ""
+  endif
+
+	" Backup standard comment expension and indentation
+	let s:commentsBackup = &comments
+	let &comments        = ""
+	let s:cinoptionsBackup = &cinoptions
+	let &cinoptions        = g:DoxygenToolkit_cinoptions
+endfunction
+
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+" Restore previously backuped parameters.
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+function! s:RestoreParameters()
+	" Restore standard comment expension and indentation
+	let &comments = s:commentsBackup
+	let &cinoptions = s:cinoptionsBackup
+endfunction
+
+
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+" Count opened/closed brackets in the given buffer.
+" Each opened bracket increase the counter by 1.
+" Each closed bracket decrease the counter by 1.
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+function! s:CountBrackets( buffer )
+  let l:count =  len( split( a:buffer, '(', 1 ) )
+  let l:count -= len( split( a:buffer, ')', 1 ) )
+  return l:count
+endfunction
+
+
+"""""""""""""""""""""""""""""""""""
+" Simple warning message function
+"""""""""""""""""""""""""""""""""""
+function! s:WarnMsg( msg )
+  echohl WarningMsg
+  echo a:msg
+  echohl None
+  return
+endfunction
 
 """"""""""""""""""""""""""
 " Shortcuts...
@@ -719,3 +930,4 @@ command! -nargs=0 DoxLic :call <SID>DoxygenLicenseFunc()
 command! -nargs=0 DoxAuthor :call <SID>DoxygenAuthorFunc()
 command! -nargs=1 DoxUndoc :call <SID>DoxygenUndocumentFunc(<q-args>)
 command! -nargs=0 DoxBlock :call <SID>DoxygenBlockFunc()
+
