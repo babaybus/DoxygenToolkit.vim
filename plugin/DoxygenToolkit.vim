@@ -1,11 +1,20 @@
 " DoxygenToolkit.vim
 " Brief: Usefull tools for Doxygen (comment, author, license).
-" Version: 0.2.0
-" Date: 01/13/08
+" Version: 0.2.1
+" Date: 01/15/08
 " Author: Mathias Lorente
 "
 " TODO: add automatically (option controlled) in/in out flags to function
 "       parameters
+"
+" Note: Bug correction (many thanks to Alexey Radkov)
+"   - C/C++: following function/method are now correctly documented:
+"      - operator(),
+"      - constructor with initialization parameter(s),
+"      - pure virtual method,
+"      - const method.
+"   - Python:
+"      - Single line function are now correctly documented.
 "
 " Note: The main function has been rewritten (I hope it is cleaner).
 "   - There is now support for function pointer as parameter (C/C++).
@@ -742,7 +751,13 @@ endfunction
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 function! s:ParseFunctionParameters( lineBuffer, doc )
 "  call s:WarnMsg( 'IN__'.a:lineBuffer )
-  let l:paramPosition = stridx( a:lineBuffer, '(' )
+  let l:paramPosition = matchend( a:lineBuffer, 'operator[[:blank:]]*([[:blank:]]*)' )
+  if ( l:paramPosition == -1 )
+    let l:paramPosition = stridx( a:lineBuffer, '(' )
+  else
+    let l:paramPosition = stridx( a:lineBuffer, '(', l:paramPosition )
+  endif
+
 
   " (cpp only) First deal with function name and returned value.
   " Function name has alredy been retrieved for Python and we need to parse
@@ -761,8 +776,12 @@ function! s:ParseFunctionParameters( lineBuffer, doc )
 
   " Work on parameters.
   let l:parametersBuffer = strpart( a:lineBuffer, l:paramPosition + 1 )
-  " Remove trailing closing bracket and trim.
-  let l:parametersBuffer = substitute( l:parametersBuffer, ')[[:blank:]]*\%(;\|:\)$', '', '' )
+  " Remove trailing closing bracket and everything that follows and trim.
+  if( s:CheckFileType() == "cpp" )
+    let l:parametersBuffer = substitute( l:parametersBuffer, ')[^)]*\%(;\|{\|\%([^:]:\%([^:]\|$\)\)\).*', '', '' )
+  else
+    let l:parametersBuffer = substitute( l:parametersBuffer, ')[^)]*:.*', '', '' )
+  endif
   let l:parametersBuffer = substitute( l:parametersBuffer, '^[[:blank:]]*\|[[:blank:]]*$', '', '' )
 
   " Remove default parameter values (if any).
