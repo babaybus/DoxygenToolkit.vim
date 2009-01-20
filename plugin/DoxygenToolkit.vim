@@ -1,11 +1,18 @@
 " DoxygenToolkit.vim
 " Brief: Usefull tools for Doxygen (comment, author, license).
-" Version: 0.2.1
-" Date: 01/15/08
+" Version: 0.2.2
+" Date: 01/20/08
 " Author: Mathias Lorente
 "
 " TODO: add automatically (option controlled) in/in out flags to function
 "       parameters
+"
+" Note: Comments are now allowed in function declaration. Example:
+"   - C/C++:   void func( int foo, // first param
+"                         int bar  /* second param */ );
+"
+"   - Python:  def func( foo,  # first param
+"                        bar ) # second param
 "
 " Note: Bug correction (many thanks to Alexey Radkov)
 "   - C/C++: following function/method are now correctly documented:
@@ -725,9 +732,20 @@ endfunction
 " - Remove everything between '/*' and '*/' or keep '/*' if '*/' is not present.
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 function! s:RemoveComments( lineBuffer )
-  " TODO: not implemented yet.
-  "       probably need to differenciate cpp from python.
-  return a:lineBuffer
+  if( s:CheckFileType() == "cpp" )
+    " Remove C++ (//) comment.
+    let l:lineBuffer = substitute( a:lineBuffer, '[[:blank:]]*\/\/.*$', '', '')
+    " Remove partial C (/* ...) comment: /* foo bar   -->   /*
+    " '/*' is preserved until corresponding '*/' is found. Other part of the
+    " comment is discarded to prevent the case where it contains characters
+    " corresponding to the endDoc string.
+    let l:lineBuffer = substitute( l:lineBuffer, '\%(\/\*\zs.*\ze\)\&\%(\%(\/\*.*\*\/\)\@!\)', '', '')
+    " Remove C (/* ... */) comment.
+    let l:lineBuffer = substitute( l:lineBuffer, '\/\*.\{-}\*\/', '', 'g')
+  else
+    let l:lineBuffer = substitute( a:lineBuffer, '[[:blank:]]*#.*$', '', '')
+  endif
+  return l:lineBuffer
 endfunction
 
 
