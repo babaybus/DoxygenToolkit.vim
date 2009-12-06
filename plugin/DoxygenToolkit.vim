@@ -1,12 +1,18 @@
 " DoxygenToolkit.vim
 " Brief: Usefull tools for Doxygen (comment, author, license).
-" Version: 0.2.6
-" Date: 11/18/09
+" Version: 0.2.7
+" Date: 12/06/09
 " Author: Mathias Lorente
 "
 " TODO: add automatically (option controlled) in/in out flags to function
 "       parameters
 " TODO: (Python) Check default paramareters defined as list/dictionnary/tuple
+"
+" Note: Solve almost all compatibility problem with c/c++ IDE
+"
+" Note: Bug correction and improve compatibility with c/c++ IDE
+"   - Documentation of function with struct parameters are now allowed.
+"   - Comments are written in two steps to avoid conflicts with c/c++ IDE.
 "
 " Note: Bug correction (thanks to Jhon Do)
 "   - DoxygenToolkit_briefTag_funcName and other xxx_xxName parameters 
@@ -226,7 +232,7 @@
 "endif
 let loaded_DoxygenToolkit = 1
 "echo 'Loading DoxygenToolkit...'
-let s:licenseTag = "Copyright (C) \<enter>"
+let s:licenseTag = "Copyright (C) \<enter>\<enter>"
 let s:licenseTag = s:licenseTag . "This program is free software; you can redistribute it and/or\<enter>"
 let s:licenseTag = s:licenseTag . "modify it under the terms of the GNU General Public License\<enter>"
 let s:licenseTag = s:licenseTag . "as published by the Free Software Foundation; either version 2\<enter>"
@@ -337,7 +343,7 @@ if !exists("g:DoxygenToolkit_compactDoc")
 endif
 
 " Necessary '\<' and '\>' will be added to each item of the list.
-let s:ignoreForReturn = ['template', 'explicit', 'inline', 'static', 'virtual', 'void\([[:blank:]]*\*\)\@!', 'const', 'volatile']
+let s:ignoreForReturn = ['template', 'explicit', 'inline', 'static', 'virtual', 'void\([[:blank:]]*\*\)\@!', 'const', 'volatile', 'struct']
 if !exists("g:DoxygenToolkit_ignoreForReturn")
   let g:DoxygenToolkit_ignoreForReturn = s:ignoreForReturn[:]
 else
@@ -396,7 +402,8 @@ function! <SID>DoxygenLicenseFunc()
   endif
   mark d
   let l:date = strftime("%Y")
-  exec "normal O".s:startCommentBlock.substitute( g:DoxygenToolkit_licenseTag, "\<enter>", "\<enter>".s:interCommentBlock, "g" )
+  exec "normal O".strpart( s:startCommentBlock, 0, 1 )
+  exec "normal A".strpart( s:startCommentBlock, 1 ).substitute( g:DoxygenToolkit_licenseTag, "\<enter>", "\<enter>".s:interCommentBlock, "g" )
   if( s:endCommentBlock != "" )
     exec "normal o".s:endCommentBlock
   endif
@@ -486,7 +493,8 @@ function! <SID>DoxygenBlockFunc()
   exec "normal ".l:insertionMode.s:interCommentTag.g:DoxygenToolkit_blockTag
   mark d
   exec "normal o".s:interCommentTag."@{ ".s:endCommentTag
-  exec "normal o".s:startCommentTag." @} ".s:endCommentTag
+  exec "normal o".strpart( s:startCommentTag, 0, 1 )
+  exec "normal A".strpart( s:startCommentTag, 1 )." @} ".s:endCommentTag
   exec "normal `d"
 
   call s:RestoreParameters()
@@ -511,7 +519,7 @@ function! <SID>DoxygenCommentFunc()
     let l:templateParameterPattern = "<[^<>]*>"
 
     let l:classPattern     = '\<class\>[[:blank:]]\+\zs'.l:someNameWithNamespacePattern.'\ze.*\%('.l:endDocPattern.'\)'
-    let l:structPattern    = '\<struct\>[[:blank:]]\+\zs'.l:someNameWithNamespacePattern.'\ze.*\%('.l:endDocPattern.'\)'
+    let l:structPattern    = '\<struct\>[[:blank:]]\+\zs'.l:someNameWithNamespacePattern.'\ze[^(),]*\%('.l:endDocPattern.'\)'
     let l:enumPattern      = '\<enum\>\%(\%([[:blank:]]\+\zs'.l:someNamePattern.'\ze[[:blank:]]*\)\|\%(\zs\ze[[:blank:]]*\)\)\%('.l:endDocPattern.'\)'
     let l:namespacePattern = '\<namespace\>[[:blank:]]\+\zs'.l:someNamePattern.'\ze[[:blank:]]*\%('.l:endDocPattern.'\)'
 
@@ -657,14 +665,17 @@ function! <SID>DoxygenCommentFunc()
   " Header
   exec "normal `d" 
   if( g:DoxygenToolkit_blockHeader != "" )
-    exec "normal O".s:startCommentBlock.g:DoxygenToolkit_blockHeader.s:endCommentBlock
+    exec "normal O".strpart( s:startCommentBlock, 0, 1 )
+    exec "normal A".strpart( s:startCommentBlock, 1 ).g:DoxygenToolkit_blockHeader.s:endCommentBlock
     exec "normal `d" 
   endif
  
   " Brief
   if( g:DoxygenToolkit_compactOneLineDoc =~ "yes" && l:doc.returns != "yes" && len( l:doc.params ) == 0 )
     let s:compactOneLineDoc = "yes"
-    exec "normal O".s:startCommentTag.g:DoxygenToolkit_briefTag_pre.g:DoxygenToolkit_briefTag_post
+    "exec "normal O".s:startCommentTag.g:DoxygenToolkit_briefTag_pre.g:DoxygenToolkit_briefTag_post
+    exec "normal O".strpart( s:startCommentTag, 0, 1 )
+    exec "normal A".strpart( s:startCommentTag, 1 ).g:DoxygenToolkit_briefTag_pre.g:DoxygenToolkit_briefTag_post
   else
     let s:compactOneLineDoc = "no"
     let l:insertionMode = s:StartDocumentationBlock()
@@ -711,7 +722,8 @@ function! <SID>DoxygenCommentFunc()
 
   " Footer
   if ( g:DoxygenToolkit_blockFooter != "" )
-    exec "normal o".s:startCommentBlock.g:DoxygenToolkit_blockFooter.s:endCommentBlock
+    exec "normal o".strpart( s:startCommentBlock, 0, 1 )
+    exec "normal A".strpart( s:startCommentBlock, 1 ).g:DoxygenToolkit_blockFooter.s:endCommentBlock
   endif
   exec "normal `d"
 
@@ -746,7 +758,9 @@ endfunction
 function! s:StartDocumentationBlock()
   " For C++ documentation format we do not need first empty line
   if( s:startCommentTag != s:interCommentTag )
-    exec "normal O".s:startCommentTag
+    "exec "normal O".s:startCommentTag
+    exec "normal O".strpart( s:startCommentTag, 0, 1 )
+    exec "normal A".strpart( s:startCommentTag, 1 )
     let l:insertionMode = "o"
   else
     let l:insertionMode = "O"
@@ -955,7 +969,7 @@ function! s:InitializeParameters()
   let &cinoptions        = g:DoxygenToolkit_cinoptions
   " Compatibility with c/c++ IDE plugin
   let s:timeoutlenBackup = &timeoutlen
-  let &timeout = 0
+  let &timeoutlen = 0
 endfunction
 
 
