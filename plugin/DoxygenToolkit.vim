@@ -1,12 +1,17 @@
 " DoxygenToolkit.vim
 " Brief: Usefull tools for Doxygen (comment, author, license).
-" Version: 0.2.7
-" Date: 12/06/09
+" Version: 0.2.8
+" Date: 08/06/09
 " Author: Mathias Lorente
 "
 " TODO: add automatically (option controlled) in/in out flags to function
 "       parameters
 " TODO: (Python) Check default paramareters defined as list/dictionnary/tuple
+"
+" Note: Add support for documentation of template parameters.
+"       Thanks to Dennis (plasmahh) and its suggestions.
+"   - New option are available: g:DoxygenToolkit_templateParamTag_pre
+"     and g:DoxygenToolkit_templateParamTag_post
 "
 " Note: Solve almost all compatibility problem with c/c++ IDE
 "
@@ -251,6 +256,12 @@ if !exists("g:DoxygenToolkit_briefTag_pre")
 endif
 if !exists("g:DoxygenToolkit_briefTag_post")
   let g:DoxygenToolkit_briefTag_post = ""
+endif
+if !exists("g:DoxygenToolkit_templateParamTag_pre")
+  let g:DoxygenToolkit_templateParamTag_pre = "@tparam "
+endif
+if !exists("g:DoxygenToolkit_templateParamTag_post")
+  let g:DoxygenToolkit_templateParamTag_post = ""
 endif
 if !exists("g:DoxygenToolkit_paramTag_pre")
   let g:DoxygenToolkit_paramTag_pre = "@param "
@@ -539,7 +550,7 @@ function! <SID>DoxygenCommentFunc()
   let l:count            = 1
   let l:endDocFound      = 0
 
-  let l:doc = { "type": "", "name": "None", "params": [], "returns": "" }
+  let l:doc = { "type": "", "name": "None", "params": [], "returns": "" , "templates": [] }
 
   " Mark current line for future use
   mark d
@@ -594,6 +605,8 @@ function! <SID>DoxygenCommentFunc()
   " Trim the buffer
   let l:lineBuffer = substitute( l:lineBuffer, "^[[:blank:]]*\|[[:blank:]]*$", "", "g" )
 
+  " Check whether it is a template definition
+  call s:ParseFunctionTemplateParameters( l:lineBuffer, l:doc )
   " Remove any template parameter.
   if( s:CheckFileType() == "cpp" )
     while( match( l:lineBuffer, l:templateParameterPattern ) != -1 )
@@ -694,6 +707,13 @@ function! <SID>DoxygenCommentFunc()
   else
     let s:insertEmptyLine = 1
   endif
+  for param in l:doc.templates
+	  if( s:insertEmptyLine == 1 )
+      exec "normal o".s:interCommentTag
+      let s:insertEmptyLine = 0
+    endif
+    exec "normal o".s:interCommentTag.g:DoxygenToolkit_templateParamTag_pre.g:DoxygenToolkit_templateParamTag_post.param
+  endfor
   for param in l:doc.params
     if( s:insertEmptyLine == 1 )
       exec "normal o".s:interCommentTag
@@ -825,6 +845,7 @@ function! s:ParseFunctionParameters( lineBuffer, doc )
   " all the function definition to know whether a value is returned or not.
   if( s:CheckFileType() == "cpp" )
     let l:functionBuffer = strpart( a:lineBuffer, 0, l:paramPosition )
+	 " Remove unnecessary elements
     for ignored in g:DoxygenToolkit_ignoreForReturn
       let l:functionBuffer = substitute( l:functionBuffer, '\<'.ignored.'\>', '', 'g' )
     endfor
@@ -941,6 +962,28 @@ function! s:ParseParameter( param )
   return l:paramName
 endfunction
 
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+" Extract template parameter name for function/class/method
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+function! s:ParseFunctionTemplateParameters( lineBuffer, doc )
+  if( match( a:lineBuffer, '^template' ) == 0 )
+	  let l:firstIndex = stridx( a:lineBuffer, '<' )
+	  if( l:firstIndex != -1 )
+		  let l:lastIndex = stridx( a:lineBuffer, '>', l:firstIndex + 1 )
+		  if( l:lastIndex != -1 )
+			  " Keep only template parameters
+			  let l:parameters = strpart( a:lineBuffer, l:firstIndex + 1, l:lastIndex - l:firstIndex - 1)
+			  " Split on separator (,)
+			  let l:params = split( l:parameters, '\,' )
+			  for param in l:params
+				  " Extract template parameter name
+				  let l:paramName = substitute(param, '[[:blank:]]*\%(\%(class\)\|\%(typename\)\)[[:blank:]]*\([^[:blank:]=]*\).*', '\1', '' )
+  				  call add( a:doc.templates, l:paramName )
+			  endfor
+		  endif
+	  endif
+  endif
+endfunction
 
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 " Define start/end documentation format and backup generic parameters.
