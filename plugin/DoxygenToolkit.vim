@@ -1,12 +1,14 @@
 " DoxygenToolkit.vim
 " Brief: Usefull tools for Doxygen (comment, author, license).
-" Version: 0.2.9
+" Version: 0.2.10
 " Date: 2009/08/08
 " Author: Mathias Lorente
 "
 " TODO: add automatically (option controlled) in/in out flags to function
 "       parameters
 " TODO: (Python) Check default paramareters defined as list/dictionnary/tuple
+"
+" Note: 'extern' keyword added in list of values to ignore for return type.
 "
 " Note: Correct bugs related to templates and add support for throw statement
 "       (many thanks to Dennis Lubert):
@@ -368,7 +370,7 @@ if !exists("g:DoxygenToolkit_compactDoc")
 endif
 
 " Necessary '\<' and '\>' will be added to each item of the list.
-let s:ignoreForReturn = ['template', 'explicit', 'inline', 'static', 'virtual', 'void\([[:blank:]]*\*\)\@!', 'const', 'volatile', 'struct']
+let s:ignoreForReturn = ['template', 'explicit', 'inline', 'static', 'virtual', 'void\([[:blank:]]*\*\)\@!', 'const', 'volatile', 'struct', 'extern']
 if !exists("g:DoxygenToolkit_ignoreForReturn")
   let g:DoxygenToolkit_ignoreForReturn = s:ignoreForReturn[:]
 else
