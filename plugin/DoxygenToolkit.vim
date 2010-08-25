@@ -1,12 +1,14 @@
 " DoxygenToolkit.vim
 " Brief: Usefull tools for Doxygen (comment, author, license).
-" Version: 0.2.10
-" Date: 2009/08/08
+" Version: 0.2.11
+" Date: 2009/08/26
 " Author: Mathias Lorente
 "
 " TODO: add automatically (option controlled) in/in out flags to function
 "       parameters
 " TODO: (Python) Check default paramareters defined as list/dictionnary/tuple
+"
+" Note: Remove trailing blank characters where they are not needed.
 "
 " Note: 'extern' keyword added in list of values to ignore for return type.
 "
@@ -744,14 +746,14 @@ function! <SID>DoxygenCommentFunc()
   endif
   for param in l:doc.templates
     if( s:insertEmptyLine == 1 )
-      exec "normal o".s:interCommentTag
+      exec "normal o".substitute( s:interCommentTag, "[[:blank:]]*$", "", "" )
       let s:insertEmptyLine = 0
     endif
     exec "normal o".s:interCommentTag.g:DoxygenToolkit_templateParamTag_pre.g:DoxygenToolkit_templateParamTag_post.param
   endfor
   for param in l:doc.params
     if( s:insertEmptyLine == 1 )
-      exec "normal o".s:interCommentTag
+      exec "normal o".substitute( s:interCommentTag, "[[:blank:]]*$", "", "" )
       let s:insertEmptyLine = 0
     endif
     exec "normal o".s:interCommentTag.g:DoxygenToolkit_paramTag_pre.g:DoxygenToolkit_paramTag_post.param
@@ -760,7 +762,7 @@ function! <SID>DoxygenCommentFunc()
   " Returned value
   if( l:doc.returns == "yes" )
     if( g:DoxygenToolkit_compactDoc != "yes" )
-      exec "normal o".s:interCommentTag
+      exec "normal o".substitute( s:interCommentTag, "[[:blank:]]*$", "", "" )
     endif
     exec "normal o".s:interCommentTag.g:DoxygenToolkit_returnTag
   endif
@@ -774,7 +776,7 @@ function! <SID>DoxygenCommentFunc()
     endif
     for param in l:doc.throws
       if( s:insertEmptyLine == 1 )
-        exec "normal o".s:interCommentTag
+        exec "normal o".substitute( s:interCommentTag, "[[:blank:]]*$", "", "" )
         let s:insertEmptyLine = 0
       endif
       exec "normal o".s:interCommentTag.g:DoxygenToolkit_throwTag_pre.g:DoxygenToolkit_throwTag_post.param
@@ -831,7 +833,7 @@ function! s:StartDocumentationBlock()
   if( s:startCommentTag != s:interCommentTag )
     "exec "normal O".s:startCommentTag
     exec "normal O".strpart( s:startCommentTag, 0, 1 )
-    exec "normal A".strpart( s:startCommentTag, 1 )
+    exec "normal A".substitute( strpart( s:startCommentTag, 1 ), "[[:blank:]]*$", "", "" )
     let l:insertionMode = "o"
   else
     let l:insertionMode = "O"
