@@ -1,12 +1,14 @@
 " DoxygenToolkit.vim
 " Brief: Usefull tools for Doxygen (comment, author, license).
-" Version: 0.2.11
-" Date: 2009/08/26
+" Version: 0.2.12
+" Date: 2010/09/08
 " Author: Mathias Lorente
 "
 " TODO: add automatically (option controlled) in/in out flags to function
 "       parameters
 " TODO: (Python) Check default paramareters defined as list/dictionnary/tuple
+"
+" Note: Position the cursor at the right position for one line documentation.
 "
 " Note: Remove trailing blank characters where they are not needed.
 "
@@ -786,7 +788,9 @@ function! <SID>DoxygenCommentFunc()
   " End (if any) of documentation block.
   if( s:endCommentTag != "" )
     if( s:compactOneLineDoc =~ "yes" )
-      let s:execCommand = "A "
+      let s:execCommand = "A"
+      exec "normal A "
+      exec "normal $md"
     else
       let s:execCommand = "o"
     endif
@@ -801,7 +805,11 @@ function! <SID>DoxygenCommentFunc()
   exec "normal `d"
 
   call s:RestoreParameters()
-  startinsert!
+  if( s:compactOneLineDoc =~ "yes" )
+    startinsert
+  else
+    startinsert!
+  endif
 
   " DEBUG purpose only
   "call s:WarnMsg( "Found a ".l:doc.type." named ".l:doc.name." (env: ".s:CheckFileType().")." )
