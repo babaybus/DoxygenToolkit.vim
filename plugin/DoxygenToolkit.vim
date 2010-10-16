@@ -1,12 +1,26 @@
 " DoxygenToolkit.vim
 " Brief: Usefull tools for Doxygen (comment, author, license).
-" Version: 0.2.12
-" Date: 2010/09/08
+" Version: 0.2.13
+" Date: 2010/10/16
 " Author: Mathias Lorente
 "
 " TODO: add automatically (option controlled) in/in out flags to function
 "       parameters
 " TODO: (Python) Check default paramareters defined as list/dictionnary/tuple
+"
+" Note: Correct insertion position and 'xxx_post' parameters.
+" 	 - Insert position is correct when g:DoxygenToolkit_compactOneLineDoc = "yes"
+" 	   and let g:DoxygenToolkit_commentType = "C++" are set.
+" 	 - When you define:
+" 	 		g:DoxygenToolkit_briefTag_pre = "@brief "
+" 	 		g:DoxygenToolkit_briefTag_post = "<++>"
+" 	 		g:DoxygenToolkit_briefTag_funcName = "yes"
+" 	   Documentation generated with these parameters is something like:
+" 	      /// @brief foo <++>
+" 	   You can configure similarly parameters to get something like:
+" 	      /// @brief foo <++>
+" 	      /// @param bar <++>
+" 	      /// @param baz <++>
 "
 " Note: Position the cursor at the right position for one line documentation.
 "
@@ -725,17 +739,17 @@ function! <SID>DoxygenCommentFunc()
   " Brief
   if( g:DoxygenToolkit_compactOneLineDoc =~ "yes" && l:doc.returns != "yes" && len( l:doc.params ) == 0 )
     let s:compactOneLineDoc = "yes"
-    "exec "normal O".s:startCommentTag.g:DoxygenToolkit_briefTag_pre.g:DoxygenToolkit_briefTag_post
     exec "normal O".strpart( s:startCommentTag, 0, 1 )
-    exec "normal A".strpart( s:startCommentTag, 1 ).g:DoxygenToolkit_briefTag_pre.g:DoxygenToolkit_briefTag_post
+    exec "normal A".strpart( s:startCommentTag, 1 ).g:DoxygenToolkit_briefTag_pre
   else
     let s:compactOneLineDoc = "no"
     let l:insertionMode = s:StartDocumentationBlock()
-    exec "normal ".l:insertionMode.s:interCommentTag.g:DoxygenToolkit_briefTag_pre.g:DoxygenToolkit_briefTag_post
+    exec "normal ".l:insertionMode.s:interCommentTag.g:DoxygenToolkit_briefTag_pre
   endif
   if( l:doc.name != "None" )
     exec "normal A".l:doc.name." "
   endif
+  exec "normal A".g:DoxygenToolkit_briefTag_post
 
   " Mark the line where the cursor will be positionned.
   mark d
@@ -751,14 +765,14 @@ function! <SID>DoxygenCommentFunc()
       exec "normal o".substitute( s:interCommentTag, "[[:blank:]]*$", "", "" )
       let s:insertEmptyLine = 0
     endif
-    exec "normal o".s:interCommentTag.g:DoxygenToolkit_templateParamTag_pre.g:DoxygenToolkit_templateParamTag_post.param
+    exec "normal o".s:interCommentTag.g:DoxygenToolkit_templateParamTag_pre.param.g:DoxygenToolkit_templateParamTag_post
   endfor
   for param in l:doc.params
     if( s:insertEmptyLine == 1 )
       exec "normal o".substitute( s:interCommentTag, "[[:blank:]]*$", "", "" )
       let s:insertEmptyLine = 0
     endif
-    exec "normal o".s:interCommentTag.g:DoxygenToolkit_paramTag_pre.g:DoxygenToolkit_paramTag_post.param
+    exec "normal o".s:interCommentTag.g:DoxygenToolkit_paramTag_pre.param.g:DoxygenToolkit_paramTag_post
   endfor
 
   " Returned value
@@ -781,7 +795,7 @@ function! <SID>DoxygenCommentFunc()
         exec "normal o".substitute( s:interCommentTag, "[[:blank:]]*$", "", "" )
         let s:insertEmptyLine = 0
       endif
-      exec "normal o".s:interCommentTag.g:DoxygenToolkit_throwTag_pre.g:DoxygenToolkit_throwTag_post.param
+      exec "normal o".s:interCommentTag.g:DoxygenToolkit_throwTag_pre.param.g:DoxygenToolkit_throwTag_post
     endfor
   endif
 
@@ -805,7 +819,7 @@ function! <SID>DoxygenCommentFunc()
   exec "normal `d"
 
   call s:RestoreParameters()
-  if( s:compactOneLineDoc =~ "yes" )
+  if( s:compactOneLineDoc =~ "yes" && s:endCommentTag != "" )
     startinsert
   else
     startinsert!
