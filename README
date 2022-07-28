@@ -18,7 +18,7 @@ any other name that you have configured).  Then you have to update
 PREDEFINED value in your doxygen configuration file with correct block name.
 You also have to set ENABLE_PREPROCESSING to YES.
 
-Generate a doxygen group (begining and ending). The tag text is
+Generate a doxygen group (beginning and ending). The tag text is
 configurable.
 
 Use:
